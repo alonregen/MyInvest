@@ -1,25 +1,25 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { SpreadsheetFile, Workbook } from "@oai/artifact-tool";
+import { fileURLToPath } from "node:url";
+import ExcelJS from "exceljs";
 
-const outputDir = path.resolve("outputs", "demo-xlsx-20260509");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const outputDir = path.resolve(__dirname, "..", "demo-xlsx-20260509");
 const outputPath = path.join(outputDir, "savings-dashboard-demo.xlsx");
-const sheet1PreviewPath = path.join(outputDir, "sheet1-preview.png");
-const guidePreviewPath = path.join(outputDir, "guide-preview.png");
 
 const holdings = [
   ["פנסיה", "מניות", 182000, "הראל", "אלון", 6500],
   ["פנסיה", "S&P 500", 158000, "מנורה מבטחים", "נועה", 5400],
   ["קרן השתלמות", "כללי", 94000, "מיטב", "אלון", 3200],
   ["קרן השתלמות", "מחקה מדד", 118000, "אלטשולר שחם", "נועה", 4100],
-  ["קופת גמל להשקעה", "אג\"ח", 76000, "הפניקס", "משפחתי", 2200],
-  ["קופת גמל", "מניות חו\"ל", 69000, "מור", "אלון", 1800],
+  ["קופת גמל להשקעה", 'אג"ח', 76000, "הפניקס", "משפחתי", 2200],
+  ["קופת גמל", 'מניות חו"ל', 69000, "מור", "אלון", 1800],
   ["חיסכון לכל ילד", "מסלול בסיכון מוגבר", 28400, "הראל", "דניאל", 900],
   ["חיסכון לכל ילד", "מסלול הלכה", 27100, "מנורה מבטחים", "יעל", 900],
   ["תיק השקעות", "מניות ישראל", 123000, "IBI", "אלון", 5000],
-  ["תיק השקעות", "אג\"ח כללי", 88000, "פסגות", "משפחתי", 2500],
+  ["תיק השקעות", 'אג"ח כללי', 88000, "פסגות", "משפחתי", 2500],
   ["פיקדון", "קצר מועד", 45000, "בנק לאומי", "משפחתי", 10000],
-  ["קופת גמל להשקעה", "עוקב נאסד\"ק", 81000, "אנליסט", "נועה", 2700],
+  ["קופת גמל להשקעה", 'עוקב נאסד"ק', 81000, "אנליסט", "נועה", 2700],
 ];
 
 const history = [
@@ -31,92 +31,65 @@ const history = [
   ["2026-05-09", 1089500],
 ];
 
+const fill = (hex) => ({
+  type: "pattern",
+  pattern: "solid",
+  fgColor: { argb: hex.startsWith("FF") ? hex : `FF${hex.replace("#", "")}` },
+});
+
 await fs.mkdir(outputDir, { recursive: true });
 
-const workbook = Workbook.create();
-const sheet = workbook.worksheets.add("sheet1");
-const guide = workbook.worksheets.add("Guide");
+const workbook = new ExcelJS.Workbook();
+const sheet = workbook.addWorksheet("sheet1");
+const guide = workbook.addWorksheet("Guide");
 
 buildImportSheet(sheet);
 buildGuideSheet(guide);
 
-const dataCheck = await workbook.inspect({
-  kind: "table",
-  range: "sheet1!A4:F16",
-  include: "values,formulas",
-  tableMaxRows: 20,
-  tableMaxCols: 8,
-});
-console.log(dataCheck.ndjson);
+const buffer = await workbook.xlsx.writeBuffer();
+await fs.writeFile(outputPath, buffer);
 
-const summaryCheck = await workbook.inspect({
-  kind: "table",
-  range: "sheet1!O4:P20",
-  include: "values,formulas",
-  tableMaxRows: 20,
-  tableMaxCols: 4,
-});
-console.log(summaryCheck.ndjson);
+console.log(JSON.stringify({ outputPath }, null, 2));
 
-const errors = await workbook.inspect({
-  kind: "match",
-  searchTerm: "#REF!|#DIV/0!|#VALUE!|#NAME\\?|#N/A",
-  options: { useRegex: true, maxResults: 100 },
-  summary: "formula error scan",
-});
-console.log(errors.ndjson);
+function buildImportSheet(ws) {
+  ws.mergeCells("A1:F1");
+  const t1 = ws.getCell("A1");
+  t1.value = "Savings Dashboard Demo / קובץ דוגמה למרכז החסכונות";
+  t1.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  t1.fill = fill("163147");
+  t1.alignment = { vertical: "middle", horizontal: "center", readingOrder: "rtl" };
+  ws.getRow(1).height = 28;
 
-const sheetPreview = await workbook.render({
-  sheetName: "sheet1",
-  autoCrop: "all",
-  scale: 1,
-  format: "png",
-});
-await fs.writeFile(sheet1PreviewPath, new Uint8Array(await sheetPreview.arrayBuffer()));
+  ws.mergeCells("A2:F2");
+  const t2 = ws.getCell("A2");
+  t2.value =
+    "Upload-ready example: rows 5-16 contain holdings, and columns O:P contain the update and growth story.";
+  t2.fill = fill("EAF1F5");
+  t2.font = { color: { argb: "FF163147" } };
+  t2.alignment = { vertical: "middle", wrapText: true };
+  ws.getRow(2).height = 22;
 
-const guidePreview = await workbook.render({
-  sheetName: "Guide",
-  autoCrop: "all",
-  scale: 1,
-  format: "png",
-});
-await fs.writeFile(guidePreviewPath, new Uint8Array(await guidePreview.arrayBuffer()));
+  const headerRow = ws.getRow(4);
+  headerRow.values = [null, null, null, null, null, null];
+  headerRow.getCell(1).value = "מוצר";
+  headerRow.getCell(2).value = "מסלול";
+  headerRow.getCell(3).value = "סכום";
+  headerRow.getCell(4).value = "איפה";
+  headerRow.getCell(5).value = "אצל מי";
+  headerRow.getCell(6).value = "הפקדות בתקופה";
+  for (let c = 1; c <= 6; c++) {
+    headerRow.getCell(c).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    headerRow.getCell(c).fill = fill("198C83");
+  }
 
-const xlsx = await SpreadsheetFile.exportXlsx(workbook);
-await xlsx.save(outputPath);
-
-console.log(JSON.stringify({ outputPath, sheet1PreviewPath, guidePreviewPath }, null, 2));
-
-function buildImportSheet(sheet) {
-  sheet.getRange("A1:F1").merge();
-  sheet.getRange("A1:F1").values = [["Savings Dashboard Demo / קובץ דוגמה למרכז החסכונות"]];
-  sheet.getRange("A1:F1").format = {
-    fill: "#163147",
-    font: { bold: true, color: "#FFFFFF" },
-  };
-  sheet.getRange("A1:F1").format.rowHeight = 28;
-
-  sheet.getRange("A2:F2").merge();
-  sheet.getRange("A2:F2").values = [[
-    "Upload-ready example: rows 5-16 contain holdings, and columns O:P contain the update and growth story.",
-  ]];
-  sheet.getRange("A2:F2").format = {
-    fill: "#EAF1F5",
-    font: { color: "#163147" },
-  };
-  sheet.getRange("A2:F2").format.rowHeight = 22;
-
-  sheet.getRange("A4:F16").values = [
-    ["מוצר", "מסלול", "סכום", "איפה", "אצל מי", "הפקדות בתקופה"],
-    ...holdings,
-  ];
-  sheet.getRange("A4:F4").format = {
-    fill: "#198C83",
-    font: { bold: true, color: "#FFFFFF" },
-  };
-
-  sheet.getRange("C5:C16").format.numberFormat = "₪#,##0";
-  sheet.getRange("F5:F16").format.numberFormat = "₪#,##0";
+  holdings.forEach((row, i) => {
+    const r = ws.getRow(5 + i);
+    row.forEach((val, j) => {
+      r.getCell(j + 1).value = val;
+    });
+    r.getCell(3).numFmt = '₪#,##0';
+    r.getCell(6).numFmt = '₪#,##0';
+  });
 
   const notes = [
     "A:E are the required dashboard fields.",
@@ -125,97 +98,113 @@ function buildImportSheet(sheet) {
     "O15:P20 store the historical totals used by the growth chart.",
   ];
 
-  sheet.getRange("H4:M4").merge();
-  sheet.getRange("H4:M4").values = [["How To Use / איך משתמשים"]];
-  sheet.getRange("H4:M4").format = {
-    fill: "#D39A39",
-    font: { bold: true, color: "#FFFFFF" },
-  };
+  ws.mergeCells("H4:M4");
+  const h4 = ws.getCell("H4");
+  h4.value = "How To Use / איך משתמשים";
+  h4.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  h4.fill = fill("D39A39");
+  h4.alignment = { horizontal: "center" };
 
   notes.forEach((note, index) => {
-    const row = 5 + index;
-    const range = sheet.getRange(`H${row}:M${row}`);
-    range.merge();
-    range.values = [[note]];
-    range.format = {
-      fill: index % 2 === 0 ? "#F7F4EC" : "#FCFAF4",
-      font: { color: "#3C4A57" },
-    };
+    const rowNum = 5 + index;
+    ws.mergeCells(`H${rowNum}:M${rowNum}`);
+    const cell = ws.getCell(`H${rowNum}`);
+    cell.value = note;
+    cell.fill = fill(index % 2 === 0 ? "F7F4EC" : "FCFAF4");
+    cell.font = { color: { argb: "FF3C4A57" } };
+    cell.alignment = { wrapText: true };
   });
 
-  sheet.getRange("O4:O9").values = [
-    ["תאריך עדכון"],
-    ["סה\"כ"],
-    [null],
-    ["סכום קודם"],
-    ["אחוז עליה"],
-    ["נטו עליה"],
-  ];
-  sheet.getRange("O4:O9").format = {
-    fill: "#EAF1F5",
-    font: { bold: true, color: "#163147" },
-  };
-  sheet.getRange("P4").values = [[new Date("2026-05-09T00:00:00")]];
-  sheet.getRange("P4").format.numberFormat = "yyyy-mm-dd";
-  sheet.getRange("P5").formulas = [["=SUM(C5:C16)"]];
-  sheet.getRange("P7").formulas = [["=P19"]];
-  sheet.getRange("P8").formulas = [["=IFERROR(P5/P7-1,0)"]];
-  sheet.getRange("P9").formulas = [["=P5-P7"]];
-  sheet.getRange("P5:P7").format.numberFormat = "₪#,##0";
-  sheet.getRange("P8").format.numberFormat = "0.0%";
-  sheet.getRange("P9").format.numberFormat = "₪#,##0";
+  const oLabels = ["תאריך עדכון", 'סה"כ', null, "סכום קודם", "אחוז עליה", "נטו עליה"];
+  oLabels.forEach((text, i) => {
+    const row = ws.getRow(4 + i);
+    const c = row.getCell(15);
+    if (text !== null) {
+      c.value = text;
+      c.font = { bold: true, color: { argb: "FF163147" } };
+      c.fill = fill("EAF1F5");
+    }
+  });
 
-  sheet.getRange("O13:P20").values = [
-    ["חודשים קודמים", null],
-    ["YYYY-MM-DD", "סכום"],
-    ...history,
-  ];
-  sheet.getRange("O13:P14").format = {
-    fill: "#163147",
-    font: { bold: true, color: "#FFFFFF" },
-  };
-  sheet.getRange("P15:P20").format.numberFormat = "₪#,##0";
+  ws.getCell("P4").value = new Date("2026-05-09T12:00:00");
+  ws.getCell("P4").numFmt = "yyyy-mm-dd";
+  ws.getCell("P5").value = { formula: "SUM(C5:C16)" };
+  ws.getCell("P7").value = { formula: "P19" };
+  ws.getCell("P8").value = { formula: "IFERROR(P5/P7-1,0)" };
+  ws.getCell("P9").value = { formula: "P5-P7" };
+  ws.getCell("P5").numFmt = '₪#,##0';
+  ws.getCell("P7").numFmt = '₪#,##0';
+  ws.getCell("P8").numFmt = "0.0%";
+  ws.getCell("P9").numFmt = '₪#,##0';
 
-  sheet.freezePanes.freezeRows(4);
+  ws.getCell("O13").value = "חודשים קודמים";
+  ws.getCell("P13").value = null;
+  ws.getCell("O14").value = "YYYY-MM-DD";
+  ws.getCell("P14").value = "סכום";
+  for (const addr of ["O13", "P13", "O14", "P14"]) {
+    const cell = ws.getCell(addr);
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = fill("163147");
+  }
 
-  setImportSheetWidths(sheet);
+  history.forEach(([d, total], i) => {
+    const r = 15 + i;
+    ws.getCell(`O${r}`).value = d;
+    ws.getCell(`P${r}`).value = total;
+    ws.getCell(`P${r}`).numFmt = '₪#,##0';
+  });
+
+  ws.views = [{ state: "frozen", xSplit: 0, ySplit: 4 }];
+
+  ws.getColumn(1).width = 18;
+  ws.getColumn(2).width = 22;
+  ws.getColumn(3).width = 12;
+  ws.getColumn(4).width = 18;
+  ws.getColumn(5).width = 14;
+  ws.getColumn(6).width = 14;
+  for (let c = 8; c <= 13; c++) {
+    ws.getColumn(c).width = 13;
+  }
+  ws.getColumn(15).width = 16;
+  ws.getColumn(16).width = 14;
 }
 
-function buildGuideSheet(guide) {
-  guide.getRange("A1:H1").merge();
-  guide.getRange("A1:H1").values = [["Demo Workbook Guide / מדריך קצר לקובץ הדוגמה"]];
-  guide.getRange("A1:H1").format = {
-    fill: "#163147",
-    font: { bold: true, color: "#FFFFFF" },
-  };
-  guide.getRange("A1:H1").format.rowHeight = 28;
+function buildGuideSheet(ws) {
+  ws.mergeCells("A1:H1");
+  const a1 = ws.getCell("A1");
+  a1.value = "Demo Workbook Guide / מדריך קצר לקובץ הדוגמה";
+  a1.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  a1.fill = fill("163147");
+  a1.alignment = { vertical: "middle", horizontal: "center" };
+  ws.getRow(1).height = 28;
 
-  guide.getRange("A2:H2").merge();
-  guide.getRange("A2:H2").values = [[
-    "Use sheet1 for upload. This Guide sheet summarizes the sample portfolio and explains the file structure.",
-  ]];
-  guide.getRange("A2:H2").format = {
-    fill: "#EAF1F5",
-    font: { color: "#163147" },
-  };
+  ws.mergeCells("A2:H2");
+  const a2 = ws.getCell("A2");
+  a2.value =
+    "Use sheet1 for upload. This Guide sheet summarizes the sample portfolio and explains the file structure.";
+  a2.fill = fill("EAF1F5");
+  a2.font = { color: { argb: "FF163147" } };
+  a2.alignment = { vertical: "middle", wrapText: true };
 
-  guide.getRange("A4:B8").values = [
-    ["Metric", "Value"],
-    ["Current total", null],
-    ["Previous total", null],
-    ["Net change", null],
-    ["Growth", null],
-  ];
-  guide.getRange("A4:B4").format = {
-    fill: "#198C83",
-    font: { bold: true, color: "#FFFFFF" },
-  };
-  guide.getRange("B5").formulas = [["=sheet1!P5"]];
-  guide.getRange("B6").formulas = [["=sheet1!P7"]];
-  guide.getRange("B7").formulas = [["=sheet1!P9"]];
-  guide.getRange("B8").formulas = [["=sheet1!P8"]];
-  guide.getRange("B5:B7").format.numberFormat = "₪#,##0";
-  guide.getRange("B8").format.numberFormat = "0.0%";
+  ws.getCell("A4").value = "Metric";
+  ws.getCell("B4").value = "Value";
+  ws.getCell("A5").value = "Current total";
+  ws.getCell("A6").value = "Previous total";
+  ws.getCell("A7").value = "Net change";
+  ws.getCell("A8").value = "Growth";
+  for (const addr of ["A4", "B4"]) {
+    const c = ws.getCell(addr);
+    c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    c.fill = fill("198C83");
+  }
+  ws.getCell("B5").value = { formula: "sheet1!P5" };
+  ws.getCell("B6").value = { formula: "sheet1!P7" };
+  ws.getCell("B7").value = { formula: "sheet1!P9" };
+  ws.getCell("B8").value = { formula: "sheet1!P8" };
+  ws.getCell("B5").numFmt = '₪#,##0';
+  ws.getCell("B6").numFmt = '₪#,##0';
+  ws.getCell("B7").numFmt = '₪#,##0';
+  ws.getCell("B8").numFmt = "0.0%";
 
   const guideNotes = [
     "1. Keep the sheet name exactly as sheet1.",
@@ -224,58 +213,41 @@ function buildGuideSheet(guide) {
     "4. Columns O:P are optional but power the growth story in the app.",
   ];
 
-  guide.getRange("D4:H4").merge();
-  guide.getRange("D4:H4").values = [["File Notes / הערות למבנה הקובץ"]];
-  guide.getRange("D4:H4").format = {
-    fill: "#D39A39",
-    font: { bold: true, color: "#FFFFFF" },
-  };
+  ws.mergeCells("D4:H4");
+  const d4 = ws.getCell("D4");
+  d4.value = "File Notes / הערות למבנה הקובץ";
+  d4.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  d4.fill = fill("D39A39");
+  d4.alignment = { horizontal: "center" };
 
   guideNotes.forEach((note, index) => {
-    const row = 5 + index;
-    const range = guide.getRange(`D${row}:H${row}`);
-    range.merge();
-    range.values = [[note]];
-    range.format = {
-      fill: index % 2 === 0 ? "#F7F4EC" : "#FCFAF4",
-      font: { color: "#3C4A57" },
-    };
+    const rowNum = 5 + index;
+    ws.mergeCells(`D${rowNum}:H${rowNum}`);
+    const cell = ws.getCell(`D${rowNum}`);
+    cell.value = note;
+    cell.fill = fill(index % 2 === 0 ? "F7F4EC" : "FCFAF4");
+    cell.font = { color: { argb: "FF3C4A57" } };
+    cell.alignment = { wrapText: true };
   });
 
-  guide.getRange("A10:B16").values = [
-    ["Date", "Total"],
-    ...history,
-  ];
-  guide.getRange("A10:B10").format = {
-    fill: "#163147",
-    font: { bold: true, color: "#FFFFFF" },
-  };
-  guide.getRange("B11:B16").format.numberFormat = "₪#,##0";
+  ws.getCell("A10").value = "Date";
+  ws.getCell("B10").value = "Total";
+  for (const addr of ["A10", "B10"]) {
+    const c = ws.getCell(addr);
+    c.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    c.fill = fill("163147");
+  }
 
-  const chart = guide.charts.add("line", guide.getRange("A10:B16"));
-  chart.title = "Growth Example";
-  chart.hasLegend = false;
-  chart.xAxis = { axisType: "textAxis" };
-  chart.yAxis = { numberFormatCode: "₪#,##0" };
-  chart.setPosition("D10", "K24");
+  history.forEach(([d, total], i) => {
+    const r = 11 + i;
+    ws.getCell(`A${r}`).value = d;
+    ws.getCell(`B${r}`).value = total;
+    ws.getCell(`B${r}`).numFmt = '₪#,##0';
+  });
 
-  setGuideSheetWidths(guide);
-}
-
-function setImportSheetWidths(sheet) {
-  sheet.getRange("A:A").format.columnWidth = 18;
-  sheet.getRange("B:B").format.columnWidth = 22;
-  sheet.getRange("C:C").format.columnWidth = 12;
-  sheet.getRange("D:D").format.columnWidth = 18;
-  sheet.getRange("E:E").format.columnWidth = 14;
-  sheet.getRange("F:F").format.columnWidth = 14;
-  sheet.getRange("H:M").format.columnWidth = 13;
-  sheet.getRange("O:O").format.columnWidth = 16;
-  sheet.getRange("P:P").format.columnWidth = 14;
-}
-
-function setGuideSheetWidths(guide) {
-  guide.getRange("A:A").format.columnWidth = 14;
-  guide.getRange("B:B").format.columnWidth = 14;
-  guide.getRange("D:H").format.columnWidth = 16;
+  ws.getColumn(1).width = 14;
+  ws.getColumn(2).width = 14;
+  for (let c = 4; c <= 8; c++) {
+    ws.getColumn(c).width = 16;
+  }
 }
