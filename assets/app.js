@@ -148,6 +148,7 @@ const dom = {
   chartSortInstitution: document.getElementById("chart-sort-institution"),
   chartSortTreemap: document.getElementById("chart-sort-treemap"),
   chartSortTopHoldings: document.getElementById("chart-sort-top-holdings"),
+  treemapResetButton: document.getElementById("treemap-reset-button"),
 };
 
 const handleViewportResize = debounce(() => {
@@ -301,6 +302,13 @@ function bootstrap() {
   renderDashboard();
   syncMobileFilterUi();
   wireChartSortControls();
+
+  if (dom.treemapResetButton && dom.treemapResetButton.dataset.treemapResetWired !== "true") {
+    dom.treemapResetButton.dataset.treemapResetWired = "true";
+    dom.treemapResetButton.addEventListener("click", () => {
+      resetTreemapAndRelatedFilters();
+    });
+  }
 }
 
 function wireChartSortControls() {
@@ -366,6 +374,22 @@ function syncChartSortControls() {
     dom.chartSortTopHoldings.value = state.chartDisplay.topHoldings;
     dom.chartSortTopHoldings.disabled = !state.records.length;
   }
+
+  if (dom.treemapResetButton) {
+    dom.treemapResetButton.disabled = !state.records.length;
+  }
+}
+
+function resetTreemapAndRelatedFilters() {
+  if (!state.records.length) {
+    return;
+  }
+
+  state.filters.products = [];
+  state.filters.tracks = [];
+  state.chartDisplay.treemap = getDefaultChartDisplay().treemap;
+  renderFilterControls();
+  renderDashboard();
 }
 
 async function handleFile(file) {

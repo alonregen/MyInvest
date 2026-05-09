@@ -475,6 +475,15 @@ button {
   flex-shrink: 0;
 }
 
+.chart-card-actions .chart-reset-button {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  min-height: 36px;
+  border-radius: 14px;
+}
+
 .chart-sort-select {
   font-family: inherit;
   font-size: 0.82rem;
