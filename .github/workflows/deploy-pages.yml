@@ -32,6 +32,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # Symlinks to local paths (e.g. outputs/node_modules) break tar on Linux — remove before archive.
+      - name: Remove stray symlinks under outputs
+        run: rm -rf outputs/node_modules 2>/dev/null || true
+
       # No configure-pages step — it uses Node 20 and often fails with exit 1; not required for static upload + deploy.
 
       - name: Upload artifact
