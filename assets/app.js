@@ -1658,7 +1658,7 @@ function renderHeroPie(viewModel) {
       title: {
         text: dimLabel ? `פיזור לפי ${dimLabel}` : "",
         left: "center",
-        top: compactLayout ? (phoneLayout ? 2 : 4) : 8,
+        top: compactLayout ? 4 : 8,
         textStyle: {
           color: "#163147",
           fontSize: compactLayout ? (phoneLayout ? 12 : 13) : 15,
@@ -1686,7 +1686,7 @@ function renderHeroPie(viewModel) {
               {
                 type: "text",
                 left: compactLayout ? "center" : "5%",
-                top: compactLayout ? (phoneLayout ? 22 : 24) : "14%",
+                top: compactLayout ? (phoneLayout ? 28 : 24) : "14%",
                 style: {
                   text: `סה״כ ${formatCurrency(viewModel.totalAmount)}`,
                   fill: "#163147",
@@ -1716,10 +1716,10 @@ function renderHeroPie(viewModel) {
           selectedMode: false,
           radius: compactLayout
             ? phoneLayout
-              ? ["46%", "82%"]
+              ? ["30%", "92%"]
               : ["44%", "78%"]
             : ["44%", "68%"],
-          center: compactLayout ? ["50%", "50%"] : ["50%", "48%"],
+          center: compactLayout ? (phoneLayout ? ["50%", "56%"] : ["50%", "50%"]) : ["50%", "48%"],
           avoidLabelOverlap: !compactLayout,
           label: {
             show: !compactLayout,
