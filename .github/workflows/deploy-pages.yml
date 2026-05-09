@@ -1,21 +1,17 @@
-# Static site (index.html + assets) — no Jekyll/build step.
-# On GitHub: disable or delete any separate “pages build and deployment” workflow that runs Jekyll.
+# Matches GitHub starter: https://github.com/actions/starter-workflows/blob/main/pages/static.yml
+# Repo settings: Pages → Build and deployment → Source: GitHub Actions.
 
-name: Deploy static site to Pages
+name: Deploy static content to Pages
 
 on:
   push:
-    branches: ["main"]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
-
-# Helps Actions run JS actions on Node 24 (GitHub deprecation of Node 20).
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
   group: pages
@@ -29,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -41,4 +37,4 @@ jobs:
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
