@@ -11,6 +11,11 @@ const FILTER_LABELS = {
   products: "מוצר",
   tracks: "מסלול",
 };
+const HERO_SORT_LABELS = {
+  "value-desc": "גדול לקטן",
+  "value-asc": "קטן לגדול",
+  "name-asc": "א״ב",
+};
 const FILTER_SECTION_KEYS = ["quick", "owners", "institutions"];
 const CHART_COLORS = ["#163147", "#198C83", "#D39A39", "#DE7655", "#7D90A5", "#4F6D7A", "#B56348", "#9DB8B4"];
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "myinvest-sidebar-collapsed";
@@ -272,31 +277,6 @@ function bootstrap() {
     applyPresetClearProductAndTrack();
   });
 
-  dom.tableBody?.addEventListener("click", (event) => {
-    const row = event.target.closest("tr[data-owner]");
-
-    if (!row) {
-      return;
-    }
-
-    applyTableRowAsFilters(row);
-  });
-
-  dom.tableBody?.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-
-    const row = event.target.closest("tr[data-owner]");
-
-    if (!row) {
-      return;
-    }
-
-    event.preventDefault();
-    applyTableRowAsFilters(row);
-  });
-
   FILTER_SECTION_KEYS.forEach((sectionKey) => {
     const toggle = dom[`${sectionKey}SectionToggle`];
 
@@ -439,6 +419,8 @@ function wireHeroToolbar() {
         state.chartDisplay.hero = next;
         refreshChartsOnly();
       }
+
+      document.getElementById("hero-sort-details")?.removeAttribute("open");
     }
   });
 
@@ -514,6 +496,12 @@ function syncChartSortControls() {
 
 function syncHeroToolbarButtons() {
   const disabled = !state.records.length;
+
+  const heroSortSummary = document.getElementById("hero-sort-summary");
+
+  if (heroSortSummary) {
+    heroSortSummary.textContent = HERO_SORT_LABELS[state.chartDisplay.hero] || "";
+  }
 
   document.querySelectorAll("[data-hero-breakdown]").forEach((button) => {
     button.disabled = disabled;
@@ -1670,37 +1658,39 @@ function renderHeroPie(viewModel) {
       title: {
         text: dimLabel ? `פיזור לפי ${dimLabel}` : "",
         left: "center",
-        top: compactLayout ? (phoneLayout ? 4 : 6) : 8,
+        top: compactLayout ? (phoneLayout ? 2 : 4) : 8,
         textStyle: {
           color: "#163147",
-          fontSize: compactLayout ? (phoneLayout ? 13 : 14) : 15,
+          fontSize: compactLayout ? (phoneLayout ? 12 : 13) : 15,
           fontWeight: 700,
         },
       },
-      legend: {
-        bottom: compactLayout ? (phoneLayout ? 2 : 4) : 0,
-        type: "scroll",
-        selectedMode: false,
-        icon: "circle",
-        itemWidth: compactLayout ? 10 : 12,
-        itemGap: compactLayout ? 6 : 10,
-        pageIconSize: compactLayout ? 11 : 12,
-        textStyle: {
-          color: "#4A6171",
-          fontSize: compactLayout ? (phoneLayout ? 10 : 11) : 12,
-        },
-      },
+      legend: compactLayout
+        ? { show: false }
+        : {
+            bottom: 0,
+            type: "scroll",
+            selectedMode: false,
+            icon: "circle",
+            itemWidth: 12,
+            itemGap: 10,
+            pageIconSize: 12,
+            textStyle: {
+              color: "#4A6171",
+              fontSize: 12,
+            },
+          },
       graphic: [
         ...(hasData
           ? [
               {
                 type: "text",
                 left: compactLayout ? "center" : "5%",
-                top: compactLayout ? (phoneLayout ? 30 : 28) : "14%",
+                top: compactLayout ? (phoneLayout ? 22 : 24) : "14%",
                 style: {
                   text: `סה״כ ${formatCurrency(viewModel.totalAmount)}`,
                   fill: "#163147",
-                  fontSize: compactLayout ? (phoneLayout ? 12 : 13) : 14,
+                  fontSize: compactLayout ? (phoneLayout ? 11 : 12) : 14,
                   fontWeight: 700,
                   textAlign: compactLayout ? "center" : "right",
                 },
@@ -1726,10 +1716,10 @@ function renderHeroPie(viewModel) {
           selectedMode: false,
           radius: compactLayout
             ? phoneLayout
-              ? ["34%", "54%"]
-              : ["36%", "58%"]
+              ? ["46%", "82%"]
+              : ["44%", "78%"]
             : ["44%", "68%"],
-          center: compactLayout ? ["50%", phoneLayout ? "42%" : "44%"] : ["50%", "48%"],
+          center: compactLayout ? ["50%", "50%"] : ["50%", "48%"],
           avoidLabelOverlap: !compactLayout,
           label: {
             show: !compactLayout,
@@ -2102,25 +2092,6 @@ function playHeroTableRowTapFeedback(row) {
   window.setTimeout(done, 500);
 }
 
-function applyTableRowAsFilters(row) {
-  if (!row || row.classList.contains("empty-row")) {
-    return;
-  }
-
-  const { owner, institution, product, track } = row.dataset;
-
-  if (!owner || !institution || !product || !track) {
-    return;
-  }
-
-  ensureValueSelected("owners", owner);
-  ensureValueSelected("institutions", institution);
-  ensureValueSelected("products", product);
-  ensureValueSelected("tracks", track);
-  renderFilterControls();
-  renderDashboard();
-}
-
 function renderTable(records) {
   dom.tableBody.textContent = "";
 
@@ -2140,8 +2111,6 @@ function renderTable(records) {
   records.forEach((record) => {
     const row = document.createElement("tr");
     row.classList.add("detail-table-row");
-    row.tabIndex = 0;
-    row.title = "לחיצה מוסיפה סינון לפי השורה (כמו בתרשים המובילים)";
     row.dataset.owner = record.owner;
     row.dataset.institution = record.institution;
     row.dataset.product = record.product;

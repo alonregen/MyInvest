@@ -331,19 +331,22 @@
                     </button>
                   </div>
                 </div>
-                <div class="hero-toolbar-group" role="group" aria-labelledby="hero-sort-label">
+                <div class="hero-toolbar-group hero-toolbar-group--sort" role="group" aria-labelledby="hero-sort-label">
                   <span id="hero-sort-label" class="hero-toolbar-label">מיון</span>
-                  <div class="hero-toggle-row">
-                    <button type="button" class="hero-toggle-btn" data-hero-sort="value-desc" aria-pressed="true">
-                      גדול לקטן
-                    </button>
-                    <button type="button" class="hero-toggle-btn" data-hero-sort="value-asc" aria-pressed="false">
-                      קטן לגדול
-                    </button>
-                    <button type="button" class="hero-toggle-btn" data-hero-sort="name-asc" aria-pressed="false">
-                      א״ב
-                    </button>
-                  </div>
+                  <details id="hero-sort-details" class="hero-sort-details">
+                    <summary class="hero-sort-summary" id="hero-sort-summary">גדול לקטן</summary>
+                    <div class="hero-sort-list">
+                      <button type="button" class="hero-sort-option hero-toggle-btn" data-hero-sort="value-desc">
+                        גדול לקטן
+                      </button>
+                      <button type="button" class="hero-sort-option hero-toggle-btn" data-hero-sort="value-asc">
+                        קטן לגדול
+                      </button>
+                      <button type="button" class="hero-sort-option hero-toggle-btn" data-hero-sort="name-asc">
+                        א״ב
+                      </button>
+                    </div>
+                  </details>
                 </div>
                 <button
                   id="hero-reset-button"
