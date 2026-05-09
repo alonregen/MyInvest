@@ -92,6 +92,14 @@
         <div id="mobile-filter-backdrop" class="mobile-filter-backdrop" aria-hidden="true"></div>
 
         <aside id="filters-card" class="filters-card" aria-label="פאנל מסננים">
+          <div id="filters-collapsed-rail" class="filters-collapsed-rail" aria-hidden="true">
+            <button id="sidebar-expand-button" type="button" class="sidebar-rail-expand" title="הרחבת מסננים">
+              מסננים
+            </button>
+            <span id="sidebar-rail-badge" class="sidebar-rail-badge">0</span>
+          </div>
+
+          <div id="filters-expanded-stack" class="filters-expanded-stack">
           <div class="filters-card-header">
             <div class="card-header">
               <div>
@@ -99,6 +107,16 @@
                 <h2>מסנני פיזור</h2>
               </div>
               <div class="card-header-actions">
+                <button
+                  id="sidebar-collapse-toggle"
+                  type="button"
+                  class="secondary-button sidebar-collapse-toggle"
+                  aria-expanded="true"
+                  aria-controls="filters-expanded-stack"
+                  title="כיווץ פאנל המסננים"
+                >
+                  כווץ
+                </button>
                 <span id="filters-active-summary" class="group-meta filter-card-status">0 פעילים</span>
                 <button id="clear-filters" class="secondary-button" type="button" disabled>
                   ניקוי
@@ -132,11 +150,10 @@
 
               <div id="quick-section-panel" class="filter-section-panel">
                 <div class="side-quick-filters">
-                  <article class="quick-filter-group">
-                    <div class="quick-filter-head">
+                  <article class="quick-filter-group quick-filter-group--product-compact">
+                    <div class="quick-filter-head quick-filter-head--compact">
                       <div>
                         <h3>מוצר</h3>
-                        <p>בחירה מהירה של סוג החיסכון</p>
                       </div>
                       <span id="products-top-count" class="group-meta group-count">0/0</span>
                     </div>
@@ -213,6 +230,7 @@
               </div>
             </section>
           </div>
+          </div>
         </aside>
 
         <section class="dashboard-content">
@@ -246,7 +264,129 @@
             <p id="mobile-results-summary" class="mobile-results-pill">0 רשומות מוצגות</p>
           </div>
 
+          <section class="slicer-strip" aria-label="סלייסרים מהירים">
+            <div class="slicer-strip-grid">
+              <article class="slicer-group">
+                <div class="slicer-group-head">
+                  <h3 class="slicer-group-title">אצל מי</h3>
+                  <span id="strip-owners-count" class="group-meta group-count">0/0</span>
+                </div>
+                <div id="strip-owners-filter" class="slicer-pill-row pill-grid"></div>
+              </article>
+              <article class="slicer-group">
+                <div class="slicer-group-head">
+                  <h3 class="slicer-group-title">איפה</h3>
+                  <span id="strip-institutions-count" class="group-meta group-count">0/0</span>
+                </div>
+                <div id="strip-institutions-filter" class="slicer-pill-row pill-grid"></div>
+              </article>
+              <article class="slicer-group">
+                <div class="slicer-group-head">
+                  <h3 class="slicer-group-title">מסלול</h3>
+                  <span id="strip-tracks-count" class="group-meta group-count">0/0</span>
+                </div>
+                <div id="strip-tracks-filter" class="slicer-pill-row pill-grid"></div>
+              </article>
+              <article class="slicer-group">
+                <div class="slicer-group-head">
+                  <h3 class="slicer-group-title">מוצר</h3>
+                  <span id="strip-products-count" class="group-meta group-count">0/0</span>
+                </div>
+                <div id="strip-products-filter" class="slicer-pill-row pill-grid"></div>
+              </article>
+            </div>
+          </section>
+
           <div id="active-filter-chips" class="chip-row"></div>
+
+          <div id="kpi-scope-banner" class="kpi-scope-banner hidden" role="status" aria-live="polite" aria-hidden="true">
+            <span id="kpi-scope-text"></span>
+          </div>
+
+          <section class="hero-playground" aria-label="מפת פיזור מרכזית">
+            <div class="hero-playground-head">
+              <div>
+                <p class="section-kicker">משחק ובחירה</p>
+                <h2>מפת הפיזור המרכזית</h2>
+              </div>
+              <div id="hero-toolbar" class="hero-toolbar">
+                <div class="hero-toolbar-group" role="group" aria-labelledby="hero-breakdown-label">
+                  <span id="hero-breakdown-label" class="hero-toolbar-label">פיזור לפי</span>
+                  <div class="hero-toggle-row">
+                    <button type="button" class="hero-toggle-btn" data-hero-breakdown="tracks" aria-pressed="true">
+                      מסלול
+                    </button>
+                    <button type="button" class="hero-toggle-btn" data-hero-breakdown="products" aria-pressed="false">
+                      מוצר
+                    </button>
+                    <button type="button" class="hero-toggle-btn" data-hero-breakdown="institutions" aria-pressed="false">
+                      גוף מנהל
+                    </button>
+                    <button type="button" class="hero-toggle-btn" data-hero-breakdown="owners" aria-pressed="false">
+                      בעלים
+                    </button>
+                  </div>
+                </div>
+                <div class="hero-toolbar-group" role="group" aria-labelledby="hero-sort-label">
+                  <span id="hero-sort-label" class="hero-toolbar-label">מיון</span>
+                  <div class="hero-toggle-row">
+                    <button type="button" class="hero-toggle-btn" data-hero-sort="value-desc" aria-pressed="true">
+                      גדול לקטן
+                    </button>
+                    <button type="button" class="hero-toggle-btn" data-hero-sort="value-asc" aria-pressed="false">
+                      קטן לגדול
+                    </button>
+                    <button type="button" class="hero-toggle-btn" data-hero-sort="name-asc" aria-pressed="false">
+                      א״ב
+                    </button>
+                  </div>
+                </div>
+                <button
+                  id="hero-reset-button"
+                  type="button"
+                  class="secondary-button hero-reset-button"
+                  disabled
+                  title="מנקה סינון מוצר ומסלול, מאפס מימד פיזור ומיון"
+                >
+                  איפוס
+                </button>
+              </div>
+            </div>
+            <div class="hero-playground-body">
+              <div id="hero-chart" class="chart-canvas hero-chart-canvas"></div>
+              <div class="hero-summary-card">
+                <table class="hero-breakdown-table" id="hero-breakdown-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">שם</th>
+                      <th scope="col">סכום</th>
+                      <th scope="col">חלק</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hero-breakdown-table-body"></tbody>
+                  <tfoot>
+                    <tr>
+                      <th scope="row" colspan="2">סה״כ בתצוגה המסוננת</th>
+                      <td id="hero-breakdown-total" class="hero-table-num">₪0</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <div class="filter-presets filter-presets--single" aria-label="פעולת סינון מהירה">
+            <button
+              type="button"
+              id="preset-clear-product-track"
+              class="secondary-button preset-button"
+              disabled
+              title="מסיר סינון לפי מוצר ומסלול בלבד"
+            >
+              ניקוי מוצר ומסלול
+            </button>
+            <p class="filter-presets-hint">משאיר את סינון בעלים וגופים כפי שהוגדר.</p>
+          </div>
 
           <section class="kpi-grid">
             <article class="kpi-card">
@@ -358,34 +498,6 @@
             <article class="chart-card chart-card-wide">
               <div class="chart-card-head">
                 <div>
-                  <p class="section-kicker">פיזור</p>
-                  <h3>מפה לפי מוצר ומסלול</h3>
-                </div>
-                <div class="chart-card-actions">
-                  <label class="visually-hidden" for="chart-sort-treemap">מיון מפת עץ</label>
-                  <select id="chart-sort-treemap" class="chart-sort-select" aria-label="מיון מפת עץ" disabled>
-                    <option value="value-desc">סכום: מהגדול לקטן</option>
-                    <option value="value-asc">סכום: מהקטן לגדול</option>
-                    <option value="name-asc">שם (א״ב)</option>
-                  </select>
-                  <button
-                    id="treemap-reset-button"
-                    type="button"
-                    class="secondary-button chart-reset-button"
-                    disabled
-                    title="מנקה סינון מוצר ומסלול מהמפה ומחזיר מיון ברירת מחדל"
-                  >
-                    איפוס מפה
-                  </button>
-                  <span class="chart-tip">לחיצה על אריח יוצרת סינון</span>
-                </div>
-              </div>
-              <div id="treemap-chart" class="chart-canvas chart-canvas-tall"></div>
-            </article>
-
-            <article class="chart-card chart-card-wide">
-              <div class="chart-card-head">
-                <div>
                   <p class="section-kicker">מובילים</p>
                   <h3>החזקות מובילות</h3>
                 </div>
@@ -409,7 +521,9 @@
                 <p class="section-kicker">פירוט מלא</p>
                 <h3>רשומות מפורטות</h3>
                 <p id="table-summary" class="table-summary">0 רשומות מוצגות</p>
-                <p class="table-hint">ב־iPhone אפשר לגלול ימינה ושמאלה כדי לראות את כל העמודות.</p>
+                <p class="table-hint">
+                  לחיצה על שורה מוסיפה סינון כמו בתרשים &quot;החזקות מובילות&quot;. ב־iPhone אפשר לגלול ימינה ושמאלה כדי לראות את כל העמודות.
+                </p>
               </div>
               <button id="export-csv" class="primary-button ghost-button" type="button" disabled>
                 ייצוא CSV מסונן

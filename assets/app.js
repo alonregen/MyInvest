@@ -13,6 +13,15 @@ const FILTER_LABELS = {
 };
 const FILTER_SECTION_KEYS = ["quick", "owners", "institutions"];
 const CHART_COLORS = ["#163147", "#198C83", "#D39A39", "#DE7655", "#7D90A5", "#4F6D7A", "#B56348", "#9DB8B4"];
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "myinvest-sidebar-collapsed";
+
+function readSidebarCollapsedPref() {
+  try {
+    return sessionStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 const collator = new Intl.Collator("he-IL", {
   sensitivity: "base",
@@ -53,9 +62,9 @@ function getDefaultChartDisplay() {
   return {
     owner: "value-desc",
     institution: "value-desc",
-    treemap: "value-desc",
     topHoldings: "amount-desc",
     growth: "time-asc",
+    hero: "value-desc",
   };
 }
 
@@ -66,6 +75,8 @@ const state = {
   warnings: [],
   filters: getDefaultFilters(),
   chartDisplay: getDefaultChartDisplay(),
+  /** Filter key: owners | institutions | products | tracks — drives hero pie dimension */
+  heroBreakdown: "tracks",
   sort: {
     key: "amount",
     direction: "desc",
@@ -73,6 +84,7 @@ const state = {
   charts: {},
   ui: {
     mobileFiltersOpen: false,
+    sidebarCollapsed: readSidebarCollapsedPref(),
     collapsedSections: {
       quick: false,
       owners: true,
@@ -87,6 +99,11 @@ const dom = {
   downloadTemplate: document.getElementById("download-template"),
   dropZone: document.getElementById("drop-zone"),
   filtersCard: document.getElementById("filters-card"),
+  filtersCollapsedRail: document.getElementById("filters-collapsed-rail"),
+  filtersExpandedStack: document.getElementById("filters-expanded-stack"),
+  sidebarCollapseToggle: document.getElementById("sidebar-collapse-toggle"),
+  sidebarExpandButton: document.getElementById("sidebar-expand-button"),
+  sidebarRailBadge: document.getElementById("sidebar-rail-badge"),
   filtersActiveSummary: document.getElementById("filters-active-summary"),
   fileName: document.getElementById("file-name"),
   updateDate: document.getElementById("update-date"),
@@ -120,6 +137,9 @@ const dom = {
   productsTopCount: document.getElementById("products-top-count"),
   tracksTopCount: document.getElementById("tracks-top-count"),
   activeFilterChips: document.getElementById("active-filter-chips"),
+  kpiScopeBanner: document.getElementById("kpi-scope-banner"),
+  kpiScopeText: document.getElementById("kpi-scope-text"),
+  presetClearProductTrack: document.getElementById("preset-clear-product-track"),
   tableBody: document.getElementById("table-body"),
   tableSummary: document.getElementById("table-summary"),
   exportCsv: document.getElementById("export-csv"),
@@ -133,7 +153,6 @@ const dom = {
   growthPercentChangeLabel: document.getElementById("growth-percent-change-label"),
   ownerChart: document.getElementById("owner-chart"),
   institutionChart: document.getElementById("institution-chart"),
-  treemapChart: document.getElementById("treemap-chart"),
   topHoldingsChart: document.getElementById("top-holdings-chart"),
   detailsSection: document.getElementById("details-section"),
   kpiTotal: document.getElementById("kpi-total"),
@@ -146,9 +165,20 @@ const dom = {
   chartSortGrowth: document.getElementById("chart-sort-growth"),
   chartSortOwner: document.getElementById("chart-sort-owner"),
   chartSortInstitution: document.getElementById("chart-sort-institution"),
-  chartSortTreemap: document.getElementById("chart-sort-treemap"),
   chartSortTopHoldings: document.getElementById("chart-sort-top-holdings"),
-  treemapResetButton: document.getElementById("treemap-reset-button"),
+  stripOwnersFilter: document.getElementById("strip-owners-filter"),
+  stripInstitutionsFilter: document.getElementById("strip-institutions-filter"),
+  stripProductsFilter: document.getElementById("strip-products-filter"),
+  stripTracksFilter: document.getElementById("strip-tracks-filter"),
+  stripOwnersCount: document.getElementById("strip-owners-count"),
+  stripInstitutionsCount: document.getElementById("strip-institutions-count"),
+  stripProductsCount: document.getElementById("strip-products-count"),
+  stripTracksCount: document.getElementById("strip-tracks-count"),
+  heroChart: document.getElementById("hero-chart"),
+  heroToolbar: document.getElementById("hero-toolbar"),
+  heroResetButton: document.getElementById("hero-reset-button"),
+  heroBreakdownTableBody: document.getElementById("hero-breakdown-table-body"),
+  heroBreakdownTotal: document.getElementById("hero-breakdown-total"),
 };
 
 const handleViewportResize = debounce(() => {
@@ -156,6 +186,7 @@ const handleViewportResize = debounce(() => {
     closeMobileFilters();
   }
 
+  syncSidebarCollapsedUi();
   resizeCharts();
   syncMobileFilterUi();
 }, 120);
@@ -220,6 +251,35 @@ function bootstrap() {
     renderDashboard();
   });
 
+  dom.presetClearProductTrack?.addEventListener("click", () => {
+    applyPresetClearProductAndTrack();
+  });
+
+  dom.tableBody?.addEventListener("click", (event) => {
+    const row = event.target.closest("tr[data-owner]");
+
+    if (!row) {
+      return;
+    }
+
+    applyTableRowAsFilters(row);
+  });
+
+  dom.tableBody?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    const row = event.target.closest("tr[data-owner]");
+
+    if (!row) {
+      return;
+    }
+
+    event.preventDefault();
+    applyTableRowAsFilters(row);
+  });
+
   FILTER_SECTION_KEYS.forEach((sectionKey) => {
     const toggle = dom[`${sectionKey}SectionToggle`];
 
@@ -246,6 +306,14 @@ function bootstrap() {
 
   dom.mobileFilterClose.addEventListener("click", () => {
     closeMobileFilters();
+  });
+
+  dom.sidebarCollapseToggle?.addEventListener("click", () => {
+    setSidebarCollapsed(true);
+  });
+
+  dom.sidebarExpandButton?.addEventListener("click", () => {
+    setSidebarCollapsed(false);
   });
 
   dom.mobileFilterBackdrop.addEventListener("click", () => {
@@ -300,13 +368,79 @@ function bootstrap() {
 
   renderFilterControls();
   renderDashboard();
+  syncSidebarCollapsedUi();
   syncMobileFilterUi();
   wireChartSortControls();
+  wireHeroToolbar();
 
-  if (dom.treemapResetButton && dom.treemapResetButton.dataset.treemapResetWired !== "true") {
-    dom.treemapResetButton.dataset.treemapResetWired = "true";
-    dom.treemapResetButton.addEventListener("click", () => {
-      resetTreemapAndRelatedFilters();
+  const heroBreakdownTable = document.getElementById("hero-breakdown-table");
+
+  if (heroBreakdownTable && heroBreakdownTable.dataset.heroTableWired !== "true") {
+    heroBreakdownTable.dataset.heroTableWired = "true";
+    heroBreakdownTable.addEventListener("click", (event) => {
+      const row = event.target.closest("tr[data-hero-value]");
+
+      if (!row) {
+        return;
+      }
+
+      applyHeroTableRowFilter(row);
+    });
+
+    heroBreakdownTable.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+
+      const row = event.target.closest("tr[data-hero-value]");
+
+      if (!row) {
+        return;
+      }
+
+      event.preventDefault();
+      applyHeroTableRowFilter(row);
+    });
+  }
+}
+
+function wireHeroToolbar() {
+  if (!dom.heroToolbar || dom.heroToolbar.dataset.heroToolbarWired === "true") {
+    return;
+  }
+
+  dom.heroToolbar.dataset.heroToolbarWired = "true";
+
+  dom.heroToolbar.addEventListener("click", (event) => {
+    const breakdownBtn = event.target.closest("[data-hero-breakdown]");
+
+    if (breakdownBtn?.dataset.heroBreakdown) {
+      const next = breakdownBtn.dataset.heroBreakdown;
+
+      if (state.heroBreakdown !== next) {
+        state.heroBreakdown = next;
+        renderDashboard();
+      }
+
+      return;
+    }
+
+    const sortBtn = event.target.closest("[data-hero-sort]");
+
+    if (sortBtn?.dataset.heroSort) {
+      const next = sortBtn.dataset.heroSort;
+
+      if (state.chartDisplay.hero !== next) {
+        state.chartDisplay.hero = next;
+        refreshChartsOnly();
+      }
+    }
+  });
+
+  if (dom.heroResetButton && dom.heroResetButton.dataset.heroResetWired !== "true") {
+    dom.heroResetButton.dataset.heroResetWired = "true";
+    dom.heroResetButton.addEventListener("click", () => {
+      resetHeroExplorationView();
     });
   }
 }
@@ -316,7 +450,6 @@ function wireChartSortControls() {
     [dom.chartSortGrowth, "growth"],
     [dom.chartSortOwner, "owner"],
     [dom.chartSortInstitution, "institution"],
-    [dom.chartSortTreemap, "treemap"],
     [dom.chartSortTopHoldings, "topHoldings"],
   ];
 
@@ -347,6 +480,7 @@ function refreshChartsOnly() {
   const filteredRecords = applyFilters(state.records, state.filters);
   const viewModel = deriveViewModel(filteredRecords);
   renderCharts(viewModel);
+  syncHeroToolbarButtons();
 }
 
 function syncChartSortControls() {
@@ -365,29 +499,41 @@ function syncChartSortControls() {
     dom.chartSortInstitution.disabled = !state.records.length;
   }
 
-  if (dom.chartSortTreemap) {
-    dom.chartSortTreemap.value = state.chartDisplay.treemap;
-    dom.chartSortTreemap.disabled = !state.records.length;
-  }
-
   if (dom.chartSortTopHoldings) {
     dom.chartSortTopHoldings.value = state.chartDisplay.topHoldings;
     dom.chartSortTopHoldings.disabled = !state.records.length;
   }
 
-  if (dom.treemapResetButton) {
-    dom.treemapResetButton.disabled = !state.records.length;
+  syncHeroToolbarButtons();
+}
+
+function syncHeroToolbarButtons() {
+  const disabled = !state.records.length;
+
+  document.querySelectorAll("[data-hero-breakdown]").forEach((button) => {
+    button.disabled = disabled;
+    button.setAttribute("aria-pressed", button.dataset.heroBreakdown === state.heroBreakdown ? "true" : "false");
+  });
+
+  document.querySelectorAll("[data-hero-sort]").forEach((button) => {
+    button.disabled = disabled;
+    button.setAttribute("aria-pressed", button.dataset.heroSort === state.chartDisplay.hero ? "true" : "false");
+  });
+
+  if (dom.heroResetButton) {
+    dom.heroResetButton.disabled = disabled;
   }
 }
 
-function resetTreemapAndRelatedFilters() {
+function resetHeroExplorationView() {
   if (!state.records.length) {
     return;
   }
 
   state.filters.products = [];
   state.filters.tracks = [];
-  state.chartDisplay.treemap = getDefaultChartDisplay().treemap;
+  state.heroBreakdown = "tracks";
+  state.chartDisplay.hero = getDefaultChartDisplay().hero;
   renderFilterControls();
   renderDashboard();
 }
@@ -413,12 +559,17 @@ async function handleFile(file) {
     state.warnings = parsed.warnings;
     state.sort = { key: "amount", direction: "desc" };
     state.chartDisplay = getDefaultChartDisplay();
+    state.heroBreakdown = "tracks";
     resetFilters();
     closeMobileFilters();
 
     renderFileMeta();
     renderFilterControls();
     renderDashboard();
+
+    if (isDesktopTwoColumnLayout()) {
+      setSidebarCollapsed(true);
+    }
 
     setBanner(
       dom.successBanner,
@@ -437,6 +588,7 @@ async function handleFile(file) {
     state.filteredRecords = [];
     state.warnings = [];
     state.chartDisplay = getDefaultChartDisplay();
+    state.heroBreakdown = "tracks";
     resetFilters();
     closeMobileFilters();
     renderFileMeta();
@@ -481,12 +633,14 @@ function parseWorkbook(fileBuffer, sourceFileName) {
     }
 
     const [product, track, rawAmount, institution, owner] = values;
-    const amount = toNumber(rawAmount);
+    const rawAmountNum = toNumber(rawAmount);
 
-    if (!product || !track || !institution || !owner || !Number.isFinite(amount)) {
+    if (!product || !track || !institution || !owner || !Number.isFinite(rawAmountNum)) {
       warnings.push(`שורה ${rowIndex + 1} דולגה כי היא לא תקינה בפורמט הנתונים.`);
       continue;
     }
+
+    const amount = sanitizeAmount(rawAmountNum);
 
     records.push({
       id: `row-${rowIndex + 1}`,
@@ -706,23 +860,29 @@ function renderDashboard() {
     dom.kpiLargestLabel.textContent = "מעלים קובץ כדי להתחיל";
     dom.kpiOwnerShare.textContent = "0%";
     dom.kpiOwnerShareLabel.textContent = "ממתין לטעינה";
+    dom.kpiScopeBanner?.classList.add("hidden");
+    dom.kpiScopeBanner?.setAttribute("aria-hidden", "true");
     renderGrowthStory(null);
     renderTable([]);
     renderFilterChips();
+    renderHeroSummaryEmpty();
     renderEmptyCharts();
     updateSortButtons();
     syncChartSortControls();
     updateMobileUtilityBar(0);
     syncMobileFilterUi();
+    updatePresetButtons();
     return;
   }
 
+  const portfolioTotals = derivePortfolioTotals(state.records);
   const filteredRecords = applyFilters(state.records, state.filters);
   const sortedRecords = sortRecords(filteredRecords, state.sort);
   const viewModel = deriveViewModel(filteredRecords);
 
   state.filteredRecords = sortedRecords;
 
+  renderScopeBanner(viewModel, portfolioTotals);
   renderKpis(viewModel);
   renderGrowthStory(state.meta?.growth || null);
   renderFilterChips();
@@ -735,6 +895,7 @@ function renderDashboard() {
   dom.tableSummary.textContent = `${numberFormatter.format(sortedRecords.length)} רשומות מוצגות מתוך ${numberFormatter.format(state.records.length)}`;
   updateMobileUtilityBar(sortedRecords.length);
   syncMobileFilterUi();
+  updatePresetButtons();
 }
 
 function renderFileMeta() {
@@ -768,6 +929,22 @@ function renderFilterControls() {
   const productsMeta = renderQuickFilterRail("products", options.products, dom.productsTopFilter, dom.productsTopCount);
   const tracksMeta = renderQuickFilterRail("tracks", options.tracks, dom.tracksTopFilter, dom.tracksTopCount);
 
+  if (dom.stripOwnersFilter && dom.stripOwnersCount) {
+    renderFilterPills("owners", options.owners, dom.stripOwnersFilter, dom.stripOwnersCount);
+  }
+
+  if (dom.stripInstitutionsFilter && dom.stripInstitutionsCount) {
+    renderFilterPills("institutions", options.institutions, dom.stripInstitutionsFilter, dom.stripInstitutionsCount);
+  }
+
+  if (dom.stripProductsFilter && dom.stripProductsCount) {
+    renderFilterPills("products", options.products, dom.stripProductsFilter, dom.stripProductsCount);
+  }
+
+  if (dom.stripTracksFilter && dom.stripTracksCount) {
+    renderFilterPills("tracks", options.tracks, dom.stripTracksFilter, dom.stripTracksCount);
+  }
+
   renderFilterSectionSummary({
     owners: ownersMeta,
     institutions: institutionsMeta,
@@ -779,6 +956,13 @@ function renderFilterControls() {
 }
 
 function renderFilterPills(filterKey, options, container, counterElement) {
+  if (!container || !counterElement) {
+    return {
+      selectedCount: 0,
+      totalCount: 0,
+    };
+  }
+
   container.textContent = "";
   const selectedCount = getSelectedOptionCount(filterKey, options);
   setGroupCount(counterElement, selectedCount, options.length);
@@ -835,6 +1019,13 @@ function renderFilterPills(filterKey, options, container, counterElement) {
 }
 
 function renderQuickFilterRail(filterKey, options, container, counterElement) {
+  if (!container || !counterElement) {
+    return {
+      selectedCount: 0,
+      totalCount: 0,
+    };
+  }
+
   container.textContent = "";
   const selectedCount = getSelectedOptionCount(filterKey, options);
   setGroupCount(counterElement, selectedCount, options.length);
@@ -944,6 +1135,36 @@ function buildActiveFilterChips() {
   return chips;
 }
 
+function derivePortfolioTotals(records) {
+  const totalAmount = records.reduce((sum, record) => sum + sanitizeAmount(record.amount), 0);
+
+  return {
+    totalAmount,
+    holdingsCount: records.length,
+  };
+}
+
+function renderScopeBanner(filteredViewModel, portfolioTotals) {
+  if (!dom.kpiScopeBanner || !dom.kpiScopeText) {
+    return;
+  }
+
+  if (!hasActiveFilters()) {
+    dom.kpiScopeBanner.classList.add("hidden");
+    dom.kpiScopeBanner.setAttribute("aria-hidden", "true");
+    return;
+  }
+
+  dom.kpiScopeBanner.classList.remove("hidden");
+  dom.kpiScopeBanner.setAttribute("aria-hidden", "false");
+
+  const portfolioTotal = portfolioTotals.totalAmount;
+  const shareOfPortfolio =
+    portfolioTotal > 0 ? percentFormatter.format(filteredViewModel.totalAmount / portfolioTotal) : "0%";
+
+  dom.kpiScopeText.textContent = `מציגים ${formatCurrency(filteredViewModel.totalAmount)} מתוך ${formatCurrency(portfolioTotal)} בשווי · ${numberFormatter.format(filteredViewModel.holdingsCount)} מתוך ${numberFormatter.format(portfolioTotals.holdingsCount)} רשומות (${shareOfPortfolio} מהפורטפוליו)`;
+}
+
 function renderKpis(viewModel) {
   dom.kpiTotal.textContent = formatCurrency(viewModel.totalAmount);
   dom.kpiHoldings.textContent = numberFormatter.format(viewModel.holdingsCount);
@@ -954,13 +1175,30 @@ function renderKpis(viewModel) {
   dom.kpiOwnerShareLabel.textContent = viewModel.biggestOwnerShare.label;
 }
 
+function updatePresetButtons() {
+  const enabled = Boolean(state.records.length);
+
+  if (dom.presetClearProductTrack) {
+    dom.presetClearProductTrack.disabled = !enabled;
+  }
+}
+
+function applyPresetClearProductAndTrack() {
+  state.filters.products = [];
+  state.filters.tracks = [];
+  renderFilterControls();
+  renderDashboard();
+}
+
 function renderCharts(viewModel) {
   ensureCharts();
   renderGrowthChart(state.meta?.growth || null);
+  const filteredTotal = viewModel.totalAmount;
   renderOwnerChart(viewModel.ownerBreakdown);
-  renderInstitutionChart(viewModel.institutionBreakdown);
-  renderTreemapChart(viewModel.productTreemap);
-  renderTopHoldingsChart(viewModel.topHoldings);
+  renderInstitutionChart(viewModel.institutionBreakdown, filteredTotal);
+  renderTopHoldingsChart(viewModel.topHoldings, filteredTotal);
+  renderHeroPie(viewModel);
+  renderHeroSummaryTable(viewModel);
   resizeCharts();
 }
 
@@ -994,8 +1232,10 @@ function ensureCharts() {
     state.charts.growth = echarts.init(dom.growthChart);
     state.charts.owner = echarts.init(dom.ownerChart);
     state.charts.institution = echarts.init(dom.institutionChart);
-    state.charts.treemap = echarts.init(dom.treemapChart);
     state.charts.topHoldings = echarts.init(dom.topHoldingsChart);
+    if (dom.heroChart) {
+      state.charts.hero = echarts.init(dom.heroChart);
+    }
 
     state.charts.owner.on("click", (params) => {
       if (params?.data?.filterValue) {
@@ -1013,25 +1253,6 @@ function ensureCharts() {
       }
     });
 
-    state.charts.treemap.on("click", (params) => {
-      const data = params?.data;
-
-      if (!data) {
-        return;
-      }
-
-      if (data.product) {
-        ensureValueSelected("products", data.product);
-      }
-
-      if (data.track) {
-        ensureValueSelected("tracks", data.track);
-      }
-
-      renderFilterControls();
-      renderDashboard();
-    });
-
     state.charts.topHoldings.on("click", (params) => {
       const record = params?.data?.record;
 
@@ -1045,6 +1266,16 @@ function ensureCharts() {
       ensureValueSelected("tracks", record.track);
       renderFilterControls();
       renderDashboard();
+    });
+
+    state.charts.hero?.on("click", (params) => {
+      const filterKey = state.heroBreakdown;
+
+      if (params?.data?.filterValue && Object.hasOwn(FILTER_KEYS, filterKey)) {
+        toggleArrayFilter(filterKey, params.data.filterValue);
+        renderFilterControls();
+        renderDashboard();
+      }
     });
   }
 }
@@ -1096,33 +1327,24 @@ function sortBreakdownItems(items, mode) {
   return copy;
 }
 
-function sortTreemapNodes(nodes, mode) {
-  if (!nodes?.length) {
-    return [];
+function getHeroBreakdownItems(viewModel, heroBreakdown) {
+  switch (heroBreakdown) {
+    case "owners":
+      return viewModel.ownerBreakdown;
+    case "institutions":
+      return viewModel.institutionBreakdown;
+    case "products":
+      return viewModel.productBreakdown;
+    case "tracks":
+      return viewModel.trackBreakdown;
+    default:
+      return viewModel.trackBreakdown;
   }
+}
 
-  const rank = (arr) => {
-    const list = [...arr];
-
-    if (mode === "value-desc") {
-      list.sort((a, b) => (b.value || 0) - (a.value || 0) || collator.compare(String(a.name), String(b.name)));
-    } else if (mode === "value-asc") {
-      list.sort((a, b) => (a.value || 0) - (b.value || 0) || collator.compare(String(a.name), String(b.name)));
-    } else if (mode === "name-asc") {
-      list.sort((a, b) => collator.compare(String(a.name), String(b.name)));
-    } else {
-      list.sort((a, b) => (b.value || 0) - (a.value || 0) || collator.compare(String(a.name), String(b.name)));
-    }
-
-    return list;
-  };
-
-  return rank(
-    nodes.map((node) => ({
-      ...node,
-      children: node.children?.length ? rank(node.children) : node.children,
-    }))
-  );
+function getSortedHeroItems(viewModel) {
+  const raw = getHeroBreakdownItems(viewModel, state.heroBreakdown);
+  return sortBreakdownItems(raw, state.chartDisplay.hero);
 }
 
 function orderTopHoldingsDisplay(topHoldings, mode) {
@@ -1160,6 +1382,11 @@ function renderGrowthChart(growth) {
     }
   }
 
+  const dateTickCount = seriesData.length;
+  const rotateCategoryLabels = dateTickCount > 6 ? (phoneLayout ? 42 : 30) : 0;
+  const growthGridBottom =
+    (phoneLayout ? 30 : 42) + (rotateCategoryLabels ? (phoneLayout ? 26 : 22) : dateTickCount > 12 ? 14 : 0);
+
   state.charts.growth.setOption(
     {
       animationDuration: 650,
@@ -1167,7 +1394,7 @@ function renderGrowthChart(growth) {
       grid: {
         top: 24,
         right: phoneLayout ? 10 : 18,
-        bottom: phoneLayout ? 30 : 42,
+        bottom: growthGridBottom,
         left: phoneLayout ? 54 : 70,
         containLabel: true,
       },
@@ -1214,7 +1441,10 @@ function renderGrowthChart(growth) {
         },
         axisLabel: {
           color: "#4A6171",
-          fontSize: phoneLayout ? 11 : 12,
+          fontSize: phoneLayout ? 10 : 11,
+          rotate: rotateCategoryLabels,
+          hideOverlap: true,
+          margin: 10,
         },
       },
       yAxis: {
@@ -1231,6 +1461,8 @@ function renderGrowthChart(growth) {
         axisLabel: {
           color: "#4A6171",
           formatter: (value) => formatCompactCurrency(value),
+          hideOverlap: true,
+          margin: 8,
         },
       },
       series: [
@@ -1335,7 +1567,7 @@ function renderOwnerChart(ownerBreakdown) {
       tooltip: {
         trigger: "item",
         formatter: ({ name, value, percent }) =>
-          `${name}<br>${formatCurrency(value)}<br>${percentFormatter.format(percent / 100)}`,
+          `${name}<br>${formatCurrency(value)}<br>${percentFormatter.format(percent / 100)} מהשווי בתצוגה המסוננת`,
       },
       legend: {
         bottom: 0,
@@ -1384,10 +1616,148 @@ function renderOwnerChart(ownerBreakdown) {
   );
 }
 
-function renderInstitutionChart(institutionBreakdown) {
+function renderHeroPie(viewModel) {
+  if (!state.charts.hero) {
+    return;
+  }
+
+  const ordered = getSortedHeroItems(viewModel);
+  const hasData = ordered.length > 0;
+  const phoneLayout = isPhoneLayout();
+  const dimLabel = FILTER_LABELS[state.heroBreakdown] || "";
+
+  state.charts.hero.setOption(
+    {
+      animationDuration: 500,
+      color: CHART_COLORS,
+      tooltip: {
+        trigger: "item",
+        formatter: ({ name, value, percent }) =>
+          `${name}<br>${formatCurrency(value)}<br>${percentFormatter.format(percent / 100)} מהשווי בתצוגה המסוננת`,
+      },
+      title: {
+        text: dimLabel ? `פיזור לפי ${dimLabel}` : "",
+        left: "center",
+        top: phoneLayout ? 4 : 8,
+        textStyle: {
+          color: "#163147",
+          fontSize: phoneLayout ? 14 : 15,
+          fontWeight: 700,
+        },
+      },
+      legend: {
+        bottom: 0,
+        type: "scroll",
+        icon: "circle",
+        textStyle: {
+          color: "#4A6171",
+          fontSize: phoneLayout ? 11 : 12,
+        },
+      },
+      graphic: [
+        ...(hasData
+          ? [
+              {
+                type: "text",
+                left: phoneLayout ? "4%" : "5%",
+                top: phoneLayout ? "12%" : "14%",
+                style: {
+                  text: `סה״כ ${formatCurrency(viewModel.totalAmount)}`,
+                  fill: "#163147",
+                  fontSize: phoneLayout ? 13 : 14,
+                  fontWeight: 700,
+                },
+              },
+            ]
+          : [
+              {
+                type: "text",
+                left: "center",
+                top: "middle",
+                style: {
+                  text: "אין נתונים לאחר הסינון",
+                  fill: "#4A6171",
+                  fontSize: 15,
+                  fontWeight: 600,
+                },
+              },
+            ]),
+      ],
+      series: [
+        {
+          type: "pie",
+          radius: phoneLayout ? ["38%", "58%"] : ["44%", "68%"],
+          center: ["50%", phoneLayout ? "46%" : "48%"],
+          avoidLabelOverlap: !phoneLayout,
+          label: {
+            show: !phoneLayout,
+            formatter: ({ name, percent }) => `${name}\n${percentFormatter.format(percent / 100)}`,
+            color: "#163147",
+          },
+          data: ordered.map((item) => ({
+            name: item.name,
+            value: item.value,
+            filterValue: item.name,
+          })),
+        },
+      ],
+    },
+    true
+  );
+}
+
+function renderHeroSummaryTable(viewModel) {
+  if (!dom.heroBreakdownTableBody || !dom.heroBreakdownTotal) {
+    return;
+  }
+
+  dom.heroBreakdownTableBody.textContent = "";
+  const ordered = getSortedHeroItems(viewModel);
+  const total = viewModel.totalAmount;
+
+  dom.heroBreakdownTotal.textContent = formatCurrency(total);
+
+  if (!ordered.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 3;
+    td.textContent = "אין נתונים לאחר הסינון";
+    td.className = "hero-table-empty";
+    tr.appendChild(td);
+    dom.heroBreakdownTableBody.appendChild(tr);
+    return;
+  }
+
+  ordered.forEach((item) => {
+    const tr = document.createElement("tr");
+    tr.tabIndex = 0;
+    tr.setAttribute("role", "button");
+    tr.dataset.heroFilterKey = state.heroBreakdown;
+    tr.dataset.heroValue = item.name;
+    const share = total > 0 ? item.value / total : 0;
+
+    const nameCell = document.createElement("td");
+    nameCell.textContent = item.name;
+
+    const valueCell = document.createElement("td");
+    valueCell.className = "hero-table-num";
+    valueCell.textContent = formatCurrency(item.value);
+
+    const pctCell = document.createElement("td");
+    pctCell.className = "hero-table-num";
+    pctCell.textContent = percentFormatter.format(share);
+
+    tr.append(nameCell, valueCell, pctCell);
+    dom.heroBreakdownTableBody.appendChild(tr);
+  });
+}
+
+function renderInstitutionChart(institutionBreakdown, filteredTotal) {
   const ordered = sortBreakdownItems(institutionBreakdown, state.chartDisplay.institution);
   const labels = ordered.map((item) => item.name);
   const phoneLayout = isPhoneLayout();
+  const maxValue = ordered.reduce((max, item) => Math.max(max, sanitizeAmount(item.value)), 0);
+  const gridRight = computeBarChartGridRight(maxValue, phoneLayout);
 
   state.charts.institution.setOption(
     {
@@ -1395,9 +1765,9 @@ function renderInstitutionChart(institutionBreakdown) {
       color: ["#198C83"],
       grid: {
         top: 10,
-        right: phoneLayout ? 6 : 12,
-        bottom: 12,
-        left: phoneLayout ? 84 : 110,
+        right: gridRight,
+        bottom: phoneLayout ? 18 : 22,
+        left: phoneLayout ? 84 : 118,
         containLabel: true,
       },
       tooltip: {
@@ -1405,14 +1775,24 @@ function renderInstitutionChart(institutionBreakdown) {
         axisPointer: { type: "shadow" },
         formatter: (params) => {
           const item = params[0];
-          return `${item.name}<br>${formatCurrency(item.value)}`;
+          const raw = sanitizeAmount(item.value);
+          const shareLine =
+            filteredTotal > 0 ? `<br>${percentFormatter.format(raw / filteredTotal)} מהשווי בתצוגה המסוננת` : "";
+
+          return `${item.name}<br>${formatCurrency(item.value)}${shareLine}`;
         },
       },
       xAxis: {
         type: "value",
+        min: 0,
+        max: maxValue > 0 ? maxValue * 1.08 : undefined,
+        splitNumber: 5,
         axisLabel: {
           color: "#4A6171",
-          formatter: (value) => numberFormatter.format(value),
+          fontSize: phoneLayout ? 10 : 11,
+          formatter: (value) => formatCompactCurrency(value),
+          hideOverlap: true,
+          margin: 10,
         },
         splitLine: {
           lineStyle: { color: "rgba(15, 36, 52, 0.08)" },
@@ -1421,10 +1801,12 @@ function renderInstitutionChart(institutionBreakdown) {
       yAxis: {
         type: "category",
         data: labels,
+        inverse: true,
         axisLabel: {
           color: "#163147",
-          width: phoneLayout ? 72 : 120,
+          width: phoneLayout ? 72 : 128,
           overflow: "truncate",
+          hideOverlap: true,
         },
       },
       series: [
@@ -1432,7 +1814,7 @@ function renderInstitutionChart(institutionBreakdown) {
           type: "bar",
           barWidth: phoneLayout ? 16 : 20,
           data: ordered.map((item) => ({
-            value: item.value,
+            value: sanitizeAmount(item.value),
             name: item.name,
             filterValue: item.name,
             itemStyle: {
@@ -1440,10 +1822,10 @@ function renderInstitutionChart(institutionBreakdown) {
             },
           })),
           label: {
-            show: !phoneLayout,
+            show: true,
             position: "right",
             color: "#163147",
-            formatter: ({ value }) => formatCurrency(value),
+            formatter: ({ value, dataIndex }) => (dataIndex < 3 ? formatCurrency(value) : ""),
           },
         },
       ],
@@ -1467,97 +1849,15 @@ function renderInstitutionChart(institutionBreakdown) {
   );
 }
 
-function renderTreemapChart(productTreemap) {
-  const phoneLayout = isPhoneLayout();
-  const sortedTreemap = sortTreemapNodes(productTreemap, state.chartDisplay.treemap);
-
-  state.charts.treemap.setOption(
-    {
-      animationDuration: 500,
-      color: CHART_COLORS,
-      tooltip: {
-        formatter: ({ data }) => {
-          const title = data.track ? `${data.product} / ${data.track}` : data.name;
-          return `${title}<br>${formatCurrency(data.value || 0)}`;
-        },
-      },
-      series: [
-        {
-          type: "treemap",
-          roam: false,
-          nodeClick: false,
-          breadcrumb: { show: false },
-          label: {
-            color: "#163147",
-            formatter: ({ data }) => {
-              const label = truncateText(data.track || data.name, phoneLayout ? 12 : 22);
-              return `${label}\n${formatCurrency(data.value || 0)}`;
-            },
-          },
-          upperLabel: {
-            show: true,
-            height: 26,
-            color: "#163147",
-            formatter: ({ data }) => truncateText(data.name, phoneLayout ? 12 : 20),
-          },
-          itemStyle: {
-            borderColor: "#fdfaf3",
-            borderWidth: 3,
-            gapWidth: 3,
-          },
-          levels: [
-            {
-              itemStyle: {
-                borderColor: "#fdfaf3",
-                borderWidth: 3,
-                gapWidth: 4,
-              },
-              upperLabel: {
-                show: true,
-                color: "#163147",
-                fontWeight: 700,
-                fontSize: phoneLayout ? 11 : 12,
-              },
-            },
-            {
-              colorSaturation: [0.24, 0.7],
-              itemStyle: {
-                borderColorSaturation: 0.2,
-                gapWidth: 2,
-                borderWidth: 2,
-              },
-            },
-          ],
-          data: sortedTreemap,
-        },
-      ],
-      graphic: !sortedTreemap.length
-        ? [
-            {
-              type: "text",
-              left: "center",
-              top: "middle",
-              style: {
-                text: "אין נתונים לאחר הסינון",
-                fill: "#4A6171",
-                fontSize: 15,
-                fontWeight: 600,
-              },
-            },
-          ]
-        : [],
-    },
-    true
-  );
-}
-
-function renderTopHoldingsChart(topHoldings) {
+function renderTopHoldingsChart(topHoldings, filteredTotal) {
   const phoneLayout = isPhoneLayout();
   const ordered = orderTopHoldingsDisplay(topHoldings, state.chartDisplay.topHoldings);
   const chartItems = ordered.map((item) => ({
     axisLabel: truncateText(item.axisLabel, phoneLayout ? 16 : 28),
     record: item.record,
   }));
+  const maxAmount = chartItems.reduce((max, item) => Math.max(max, sanitizeAmount(item.record.amount)), 0);
+  const gridRight = computeBarChartGridRight(maxAmount, phoneLayout);
 
   state.charts.topHoldings.setOption(
     {
@@ -1565,9 +1865,9 @@ function renderTopHoldingsChart(topHoldings) {
       color: ["#D39A39"],
       grid: {
         top: 10,
-        right: phoneLayout ? 8 : 18,
-        bottom: 12,
-        left: phoneLayout ? 118 : 160,
+        right: gridRight,
+        bottom: phoneLayout ? 18 : 22,
+        left: phoneLayout ? 118 : 168,
         containLabel: true,
       },
       tooltip: {
@@ -1576,14 +1876,24 @@ function renderTopHoldingsChart(topHoldings) {
         formatter: (params) => {
           const item = params[0];
           const record = item.data.record;
-          return `${record.product} / ${record.track}<br>${record.owner} · ${record.institution}<br>${formatCurrency(record.amount)}`;
+          const amt = sanitizeAmount(record.amount);
+          const shareLine =
+            filteredTotal > 0 ? `<br>${percentFormatter.format(amt / filteredTotal)} מהשווי בתצוגה המסוננת` : "";
+
+          return `${record.product} / ${record.track}<br>${record.owner} · ${record.institution}<br>${formatCurrency(record.amount)}${shareLine}`;
         },
       },
       xAxis: {
         type: "value",
+        min: 0,
+        max: maxAmount > 0 ? maxAmount * 1.08 : undefined,
+        splitNumber: 5,
         axisLabel: {
           color: "#4A6171",
-          formatter: (value) => numberFormatter.format(value),
+          fontSize: phoneLayout ? 10 : 11,
+          formatter: (value) => formatCompactCurrency(value),
+          hideOverlap: true,
+          margin: 10,
         },
         splitLine: {
           lineStyle: { color: "rgba(15, 36, 52, 0.08)" },
@@ -1592,10 +1902,12 @@ function renderTopHoldingsChart(topHoldings) {
       yAxis: {
         type: "category",
         data: chartItems.map((item) => item.axisLabel),
+        inverse: true,
         axisLabel: {
           color: "#163147",
-          width: phoneLayout ? 110 : 150,
+          width: phoneLayout ? 110 : 158,
           overflow: "truncate",
+          hideOverlap: true,
         },
       },
       series: [
@@ -1603,7 +1915,7 @@ function renderTopHoldingsChart(topHoldings) {
           type: "bar",
           barWidth: phoneLayout ? 14 : 18,
           data: chartItems.map((item) => ({
-            value: item.record.amount,
+            value: sanitizeAmount(item.record.amount),
             name: item.axisLabel,
             record: item.record,
             itemStyle: {
@@ -1611,10 +1923,10 @@ function renderTopHoldingsChart(topHoldings) {
             },
           })),
           label: {
-            show: !phoneLayout,
+            show: true,
             position: "right",
             color: "#163147",
-            formatter: ({ value }) => formatCurrency(value),
+            formatter: ({ value, dataIndex }) => (dataIndex < 3 ? formatCurrency(value) : ""),
           },
         },
       ],
@@ -1642,9 +1954,10 @@ function deriveViewModel(records) {
   const totalAmount = records.reduce((sum, record) => sum + record.amount, 0);
   const institutionSet = new Set(records.map((record) => record.institution));
   const largestHoldingRecord = [...records].sort((left, right) => right.amount - left.amount)[0] || null;
-  const ownerBreakdown = buildBreakdown(records, "owner");
-  const institutionBreakdown = buildBreakdown(records, "institution");
-  const productTreemap = buildProductTreemap(records);
+  const ownerBreakdown = buildBreakdown(records, "owners");
+  const institutionBreakdown = buildBreakdown(records, "institutions");
+  const productBreakdown = buildBreakdown(records, "products");
+  const trackBreakdown = buildBreakdown(records, "tracks");
   const biggestOwner = ownerBreakdown[0];
   const topHoldings = [...records]
     .sort((left, right) => right.amount - left.amount)
@@ -1678,16 +1991,24 @@ function deriveViewModel(records) {
         },
     ownerBreakdown,
     institutionBreakdown,
-    productTreemap,
+    productBreakdown,
+    trackBreakdown,
     topHoldings,
   };
 }
 
-function buildBreakdown(records, key) {
+function buildBreakdown(records, filterKey) {
+  if (!Object.hasOwn(FILTER_KEYS, filterKey)) {
+    return [];
+  }
+
+  const field = FILTER_KEYS[filterKey];
   const grouped = new Map();
 
   records.forEach((record) => {
-    grouped.set(key === "owner" ? record.owner : record.institution, (grouped.get(key === "owner" ? record.owner : record.institution) || 0) + record.amount);
+    const bucket = record[field];
+    const add = sanitizeAmount(record.amount);
+    grouped.set(bucket, (grouped.get(bucket) || 0) + add);
   });
 
   return [...grouped.entries()]
@@ -1695,37 +2016,57 @@ function buildBreakdown(records, key) {
     .sort((left, right) => right.value - left.value || collator.compare(left.name, right.name));
 }
 
-function buildProductTreemap(records) {
-  const productMap = new Map();
+function renderHeroSummaryEmpty() {
+  if (!dom.heroBreakdownTableBody || !dom.heroBreakdownTotal) {
+    return;
+  }
 
-  records.forEach((record) => {
-    if (!productMap.has(record.product)) {
-      productMap.set(record.product, new Map());
-    }
+  dom.heroBreakdownTableBody.textContent = "";
+  dom.heroBreakdownTotal.textContent = formatCurrency(0);
 
-    const trackMap = productMap.get(record.product);
-    trackMap.set(record.track, (trackMap.get(record.track) || 0) + record.amount);
-  });
+  const tr = document.createElement("tr");
+  const td = document.createElement("td");
+  td.colSpan = 3;
+  td.textContent = "מעלים קובץ כדי לראות סיכום";
+  td.className = "hero-table-empty";
+  tr.appendChild(td);
+  dom.heroBreakdownTableBody.appendChild(tr);
+}
 
-  return [...productMap.entries()]
-    .map(([product, trackMap]) => {
-      const children = [...trackMap.entries()]
-        .map(([track, value]) => ({
-          name: track,
-          value,
-          product,
-          track,
-        }))
-        .sort((left, right) => right.value - left.value || collator.compare(left.name, right.name));
+function applyHeroTableRowFilter(row) {
+  if (!row?.dataset?.heroValue) {
+    return;
+  }
 
-      return {
-        name: product,
-        value: children.reduce((sum, child) => sum + child.value, 0),
-        product,
-        children,
-      };
-    })
-    .sort((left, right) => right.value - left.value || collator.compare(left.name, right.name));
+  const filterKey = row.dataset.heroFilterKey;
+  const value = row.dataset.heroValue;
+
+  if (!filterKey || value === undefined || !Object.hasOwn(FILTER_KEYS, filterKey)) {
+    return;
+  }
+
+  toggleArrayFilter(filterKey, value);
+  renderFilterControls();
+  renderDashboard();
+}
+
+function applyTableRowAsFilters(row) {
+  if (!row || row.classList.contains("empty-row")) {
+    return;
+  }
+
+  const { owner, institution, product, track } = row.dataset;
+
+  if (!owner || !institution || !product || !track) {
+    return;
+  }
+
+  ensureValueSelected("owners", owner);
+  ensureValueSelected("institutions", institution);
+  ensureValueSelected("products", product);
+  ensureValueSelected("tracks", track);
+  renderFilterControls();
+  renderDashboard();
 }
 
 function renderTable(records) {
@@ -1746,6 +2087,13 @@ function renderTable(records) {
 
   records.forEach((record) => {
     const row = document.createElement("tr");
+    row.classList.add("detail-table-row");
+    row.tabIndex = 0;
+    row.title = "לחיצה מוסיפה סינון לפי השורה (כמו בתרשים המובילים)";
+    row.dataset.owner = record.owner;
+    row.dataset.institution = record.institution;
+    row.dataset.product = record.product;
+    row.dataset.track = record.track;
 
     appendTableCell(row, record.product);
     appendTableCell(row, record.track);
@@ -2072,6 +2420,8 @@ function renderFilterSectionSummary(summary) {
 
   dom.filtersActiveSummary.textContent = `${numberFormatter.format(activeFilterCount)} פעילים`;
   dom.filtersActiveSummary.classList.toggle("is-empty", !activeFilterCount);
+
+  updateSidebarRailBadge();
 }
 
 function updateMobileUtilityBar(filteredCount) {
@@ -2174,6 +2524,22 @@ function toNumber(value) {
   return NaN;
 }
 
+/** Finite non-negative amount capped for JS Number safety (charts / aggregations). */
+function sanitizeAmount(value) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    return 0;
+  }
+  return Math.min(n, Number.MAX_SAFE_INTEGER);
+}
+
+function computeBarChartGridRight(maxAmount, phoneLayout) {
+  const label = formatCurrency(sanitizeAmount(maxAmount));
+  const unit = phoneLayout ? 7 : 8;
+  const padded = Math.ceil(label.length * unit + 24);
+  return Math.min(144, Math.max(phoneLayout ? 52 : 68, padded));
+}
+
 function isBlank(value) {
   return value === null || value === undefined || (typeof value === "string" && value.trim() === "");
 }
@@ -2217,6 +2583,79 @@ function getActiveFilterCount() {
   });
 
   return count;
+}
+
+function writeSidebarCollapsedPref(collapsed) {
+  try {
+    if (collapsed) {
+      sessionStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, "1");
+    } else {
+      sessionStorage.removeItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
+    }
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function isDesktopTwoColumnLayout() {
+  if (typeof window.matchMedia === "function") {
+    return window.matchMedia("(min-width: 1081px)").matches;
+  }
+
+  return window.innerWidth > 1080;
+}
+
+function scheduleResizeCharts() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      resizeCharts();
+    });
+  });
+}
+
+function setSidebarCollapsed(collapsed) {
+  if (!isDesktopTwoColumnLayout()) {
+    return;
+  }
+
+  state.ui.sidebarCollapsed = collapsed;
+  writeSidebarCollapsedPref(collapsed);
+  syncSidebarCollapsedUi();
+  scheduleResizeCharts();
+}
+
+function syncSidebarCollapsedUi() {
+  const railVisible = state.ui.sidebarCollapsed && isDesktopTwoColumnLayout();
+
+  dom.dashboardShell?.classList.toggle("is-sidebar-collapsed", railVisible);
+
+  if (dom.sidebarCollapseToggle) {
+    dom.sidebarCollapseToggle.setAttribute("aria-expanded", String(!railVisible));
+  }
+
+  if (dom.sidebarExpandButton) {
+    dom.sidebarExpandButton.setAttribute("aria-expanded", String(!railVisible));
+    dom.sidebarExpandButton.setAttribute("aria-controls", "filters-expanded-stack");
+  }
+
+  if (dom.filtersCollapsedRail) {
+    dom.filtersCollapsedRail.setAttribute("aria-hidden", String(!railVisible));
+  }
+
+  dom.filtersExpandedStack?.setAttribute("aria-hidden", String(railVisible));
+
+  updateSidebarRailBadge();
+}
+
+function updateSidebarRailBadge() {
+  if (!dom.sidebarRailBadge) {
+    return;
+  }
+
+  const activeFilterCount = getActiveFilterCount();
+
+  dom.sidebarRailBadge.textContent = numberFormatter.format(activeFilterCount);
+  dom.sidebarRailBadge.classList.toggle("is-empty", !activeFilterCount);
 }
 
 function toggleFilterSection(sectionKey) {
