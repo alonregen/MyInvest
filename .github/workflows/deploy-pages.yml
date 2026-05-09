@@ -1,5 +1,5 @@
-# Matches GitHub starter: https://github.com/actions/starter-workflows/blob/main/pages/static.yml
-# Repo settings: Pages → Build and deployment → Source: GitHub Actions.
+# Deploy when Pages → Source = "GitHub Actions".
+# No workflow needed if you use Pages → "Deploy from a branch" instead (main / root).
 
 name: Deploy static content to Pages
 
@@ -13,6 +13,9 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -25,10 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      # No configure-pages step — it uses Node 20 and often fails with exit 1; not required for static upload + deploy.
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
