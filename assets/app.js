@@ -49,12 +49,23 @@ const chartDateFormatter = new Intl.DateTimeFormat("he-IL", {
 });
 const DEFAULT_DOCUMENT_TITLE = "מרכז החסכונות";
 
+function getDefaultChartDisplay() {
+  return {
+    owner: "value-desc",
+    institution: "value-desc",
+    treemap: "value-desc",
+    topHoldings: "amount-desc",
+    growth: "time-asc",
+  };
+}
+
 const state = {
   meta: null,
   records: [],
   filteredRecords: [],
   warnings: [],
   filters: getDefaultFilters(),
+  chartDisplay: getDefaultChartDisplay(),
   sort: {
     key: "amount",
     direction: "desc",
@@ -132,6 +143,11 @@ const dom = {
   kpiLargestLabel: document.getElementById("kpi-largest-label"),
   kpiOwnerShare: document.getElementById("kpi-owner-share"),
   kpiOwnerShareLabel: document.getElementById("kpi-owner-share-label"),
+  chartSortGrowth: document.getElementById("chart-sort-growth"),
+  chartSortOwner: document.getElementById("chart-sort-owner"),
+  chartSortInstitution: document.getElementById("chart-sort-institution"),
+  chartSortTreemap: document.getElementById("chart-sort-treemap"),
+  chartSortTopHoldings: document.getElementById("chart-sort-top-holdings"),
 };
 
 const handleViewportResize = debounce(() => {
@@ -284,6 +300,72 @@ function bootstrap() {
   renderFilterControls();
   renderDashboard();
   syncMobileFilterUi();
+  wireChartSortControls();
+}
+
+function wireChartSortControls() {
+  const bindings = [
+    [dom.chartSortGrowth, "growth"],
+    [dom.chartSortOwner, "owner"],
+    [dom.chartSortInstitution, "institution"],
+    [dom.chartSortTreemap, "treemap"],
+    [dom.chartSortTopHoldings, "topHoldings"],
+  ];
+
+  bindings.forEach(([element, chartKey]) => {
+    if (!element || element.dataset.chartSortWired === "true") {
+      return;
+    }
+
+    element.dataset.chartSortWired = "true";
+    element.addEventListener("change", (event) => {
+      const value = event.target.value;
+
+      if (state.chartDisplay[chartKey] === value) {
+        return;
+      }
+
+      state.chartDisplay[chartKey] = value;
+      refreshChartsOnly();
+    });
+  });
+}
+
+function refreshChartsOnly() {
+  if (!state.records.length) {
+    return;
+  }
+
+  const filteredRecords = applyFilters(state.records, state.filters);
+  const viewModel = deriveViewModel(filteredRecords);
+  renderCharts(viewModel);
+}
+
+function syncChartSortControls() {
+  if (dom.chartSortGrowth) {
+    dom.chartSortGrowth.value = state.chartDisplay.growth;
+    dom.chartSortGrowth.disabled = !state.records.length;
+  }
+
+  if (dom.chartSortOwner) {
+    dom.chartSortOwner.value = state.chartDisplay.owner;
+    dom.chartSortOwner.disabled = !state.records.length;
+  }
+
+  if (dom.chartSortInstitution) {
+    dom.chartSortInstitution.value = state.chartDisplay.institution;
+    dom.chartSortInstitution.disabled = !state.records.length;
+  }
+
+  if (dom.chartSortTreemap) {
+    dom.chartSortTreemap.value = state.chartDisplay.treemap;
+    dom.chartSortTreemap.disabled = !state.records.length;
+  }
+
+  if (dom.chartSortTopHoldings) {
+    dom.chartSortTopHoldings.value = state.chartDisplay.topHoldings;
+    dom.chartSortTopHoldings.disabled = !state.records.length;
+  }
 }
 
 async function handleFile(file) {
@@ -306,6 +388,7 @@ async function handleFile(file) {
     state.records = parsed.records;
     state.warnings = parsed.warnings;
     state.sort = { key: "amount", direction: "desc" };
+    state.chartDisplay = getDefaultChartDisplay();
     resetFilters();
     closeMobileFilters();
 
@@ -329,6 +412,7 @@ async function handleFile(file) {
     state.records = [];
     state.filteredRecords = [];
     state.warnings = [];
+    state.chartDisplay = getDefaultChartDisplay();
     resetFilters();
     closeMobileFilters();
     renderFileMeta();
@@ -603,6 +687,7 @@ function renderDashboard() {
     renderFilterChips();
     renderEmptyCharts();
     updateSortButtons();
+    syncChartSortControls();
     updateMobileUtilityBar(0);
     syncMobileFilterUi();
     return;
@@ -610,7 +695,7 @@ function renderDashboard() {
 
   const filteredRecords = applyFilters(state.records, state.filters);
   const sortedRecords = sortRecords(filteredRecords, state.sort);
-  const viewModel = deriveViewModel(filteredRecords, state.meta);
+  const viewModel = deriveViewModel(filteredRecords);
 
   state.filteredRecords = sortedRecords;
 
@@ -620,6 +705,7 @@ function renderDashboard() {
   renderTable(sortedRecords);
   renderCharts(viewModel);
   updateSortButtons();
+  syncChartSortControls();
 
   dom.exportCsv.disabled = !sortedRecords.length;
   dom.tableSummary.textContent = `${numberFormatter.format(sortedRecords.length)} רשומות מוצגות מתוך ${numberFormatter.format(state.records.length)}`;
@@ -710,7 +796,7 @@ function renderFilterPills(filterKey, options, container, counterElement) {
     button.appendChild(textNode);
 
     const detailNode = document.createElement("small");
-    detailNode.textContent = `${numberFormatter.format(countMatchingRecords(FILTER_KEYS[filterKey], optionValue))}`;
+    detailNode.textContent = `${numberFormatter.format(countFacetedRecords(filterKey, optionValue))}`;
     button.appendChild(detailNode);
 
     fragment.appendChild(button);
@@ -768,7 +854,7 @@ function renderQuickFilterRail(filterKey, options, container, counterElement) {
 
     const countNode = document.createElement("span");
     countNode.className = "quick-filter-chip-count";
-    countNode.textContent = `${numberFormatter.format(countMatchingRecords(FILTER_KEYS[filterKey], optionValue))}`;
+    countNode.textContent = `${numberFormatter.format(countFacetedRecords(filterKey, optionValue))}`;
     button.appendChild(countNode);
 
     fragment.appendChild(button);
@@ -970,9 +1056,85 @@ function renderGrowthStory(growth) {
     : "שינוי מצטבר בין התקופות";
 }
 
+function sortBreakdownItems(items, mode) {
+  const copy = [...items];
+
+  if (mode === "value-desc") {
+    copy.sort((a, b) => b.value - a.value || collator.compare(a.name, b.name));
+  } else if (mode === "value-asc") {
+    copy.sort((a, b) => a.value - b.value || collator.compare(a.name, b.name));
+  } else if (mode === "name-asc") {
+    copy.sort((a, b) => collator.compare(a.name, b.name));
+  } else {
+    copy.sort((a, b) => b.value - a.value || collator.compare(a.name, b.name));
+  }
+
+  return copy;
+}
+
+function sortTreemapNodes(nodes, mode) {
+  if (!nodes?.length) {
+    return [];
+  }
+
+  const rank = (arr) => {
+    const list = [...arr];
+
+    if (mode === "value-desc") {
+      list.sort((a, b) => (b.value || 0) - (a.value || 0) || collator.compare(String(a.name), String(b.name)));
+    } else if (mode === "value-asc") {
+      list.sort((a, b) => (a.value || 0) - (b.value || 0) || collator.compare(String(a.name), String(b.name)));
+    } else if (mode === "name-asc") {
+      list.sort((a, b) => collator.compare(String(a.name), String(b.name)));
+    } else {
+      list.sort((a, b) => (b.value || 0) - (a.value || 0) || collator.compare(String(a.name), String(b.name)));
+    }
+
+    return list;
+  };
+
+  return rank(
+    nodes.map((node) => ({
+      ...node,
+      children: node.children?.length ? rank(node.children) : node.children,
+    }))
+  );
+}
+
+function orderTopHoldingsDisplay(topHoldings, mode) {
+  const items = [...topHoldings];
+
+  if (mode === "amount-desc") {
+    items.sort((a, b) => b.record.amount - a.record.amount);
+  } else if (mode === "amount-asc") {
+    items.sort((a, b) => a.record.amount - b.record.amount);
+  } else if (mode === "label-asc") {
+    items.sort((a, b) => collator.compare(a.axisLabel, b.axisLabel));
+  } else {
+    items.sort((a, b) => b.record.amount - a.record.amount);
+  }
+
+  return items;
+}
+
 function renderGrowthChart(growth) {
   const phoneLayout = isPhoneLayout();
-  const seriesData = growth?.history || [];
+  const history = growth?.history || [];
+  const mode = state.chartDisplay.growth;
+  const seriesData =
+    mode === "time-desc" && history.length ? [...history].reverse() : [...history];
+  const chronologicalLast = history.length ? history[history.length - 1] : null;
+  let highlightIndex = -1;
+
+  if (chronologicalLast && seriesData.length) {
+    highlightIndex = seriesData.findIndex(
+      (p) => p.date === chronologicalLast.date && Math.abs(p.total - chronologicalLast.total) <= 0.1
+    );
+
+    if (highlightIndex < 0) {
+      highlightIndex = seriesData.length - 1;
+    }
+  }
 
   state.charts.growth.setOption(
     {
@@ -1068,50 +1230,53 @@ function renderGrowthChart(growth) {
             focus: "series",
           },
           label: {
-            show: !phoneLayout && seriesData.length > 0,
+            show: !phoneLayout && seriesData.length > 0 && highlightIndex >= 0,
             position: "top",
             color: "#163147",
             fontWeight: 700,
-            formatter: (params) => (params.dataIndex === seriesData.length - 1 ? formatCurrency(params.value) : ""),
+            formatter: (params) => (params.dataIndex === highlightIndex ? formatCurrency(params.value) : ""),
           },
-          data: seriesData.map((point, index) => ({
-            value: point.total,
-            point: {
-              ...point,
-              change: index > 0 ? point.total - seriesData[index - 1].total : NaN,
-            },
-            itemStyle: {
-              color: index === seriesData.length - 1 ? "#D39A39" : "#198C83",
-              borderColor: "#ffffff",
-              borderWidth: 2,
-            },
-          })),
-          markPoint: seriesData.length
-            ? {
-                symbol: "roundRect",
-                symbolSize: phoneLayout ? [92, 34] : [118, 38],
-                itemStyle: {
-                  color: "#163147",
-                  borderRadius: 18,
-                  shadowBlur: 16,
-                  shadowColor: "rgba(16, 39, 57, 0.2)",
-                },
-                label: {
-                  color: "#F9F6EF",
-                  fontWeight: 800,
-                  formatter: `כעת ${formatCurrency(seriesData[seriesData.length - 1].total)}`,
-                },
-                data: [
-                  {
-                    coord: [
-                      formatChartAxisDate(seriesData[seriesData.length - 1].date),
-                      seriesData[seriesData.length - 1].total,
-                    ],
-                    value: seriesData[seriesData.length - 1].total,
+          data: seriesData.map((point, index) => {
+            const prev = index > 0 ? seriesData[index - 1] : null;
+            const change = prev ? point.total - prev.total : NaN;
+
+            return {
+              value: point.total,
+              point: {
+                ...point,
+                change,
+              },
+              itemStyle: {
+                color: index === highlightIndex ? "#D39A39" : "#198C83",
+                borderColor: "#ffffff",
+                borderWidth: 2,
+              },
+            };
+          }),
+          markPoint:
+            seriesData.length && chronologicalLast
+              ? {
+                  symbol: "roundRect",
+                  symbolSize: phoneLayout ? [92, 34] : [118, 38],
+                  itemStyle: {
+                    color: "#163147",
+                    borderRadius: 18,
+                    shadowBlur: 16,
+                    shadowColor: "rgba(16, 39, 57, 0.2)",
                   },
-                ],
-              }
-            : undefined,
+                  label: {
+                    color: "#F9F6EF",
+                    fontWeight: 800,
+                    formatter: `כעת ${formatCurrency(chronologicalLast.total)}`,
+                  },
+                  data: [
+                    {
+                      coord: [formatChartAxisDate(chronologicalLast.date), chronologicalLast.total],
+                      value: chronologicalLast.total,
+                    },
+                  ],
+                }
+              : undefined,
         },
       ],
       graphic: !seriesData.length
@@ -1135,7 +1300,8 @@ function renderGrowthChart(growth) {
 }
 
 function renderOwnerChart(ownerBreakdown) {
-  const hasData = ownerBreakdown.length > 0;
+  const ordered = sortBreakdownItems(ownerBreakdown, state.chartDisplay.owner);
+  const hasData = ordered.length > 0;
   const phoneLayout = isPhoneLayout();
 
   state.charts.owner.setOption(
@@ -1182,7 +1348,7 @@ function renderOwnerChart(ownerBreakdown) {
             formatter: ({ name, percent }) => `${name}\n${percentFormatter.format(percent / 100)}`,
             color: "#163147",
           },
-          data: ownerBreakdown.map((item) => ({
+          data: ordered.map((item) => ({
             name: item.name,
             value: item.value,
             filterValue: item.name,
@@ -1195,7 +1361,8 @@ function renderOwnerChart(ownerBreakdown) {
 }
 
 function renderInstitutionChart(institutionBreakdown) {
-  const labels = institutionBreakdown.map((item) => item.name);
+  const ordered = sortBreakdownItems(institutionBreakdown, state.chartDisplay.institution);
+  const labels = ordered.map((item) => item.name);
   const phoneLayout = isPhoneLayout();
 
   state.charts.institution.setOption(
@@ -1240,7 +1407,7 @@ function renderInstitutionChart(institutionBreakdown) {
         {
           type: "bar",
           barWidth: phoneLayout ? 16 : 20,
-          data: institutionBreakdown.map((item) => ({
+          data: ordered.map((item) => ({
             value: item.value,
             name: item.name,
             filterValue: item.name,
@@ -1256,7 +1423,7 @@ function renderInstitutionChart(institutionBreakdown) {
           },
         },
       ],
-      graphic: !institutionBreakdown.length
+      graphic: !ordered.length
         ? [
             {
               type: "text",
@@ -1278,6 +1445,7 @@ function renderInstitutionChart(institutionBreakdown) {
 
 function renderTreemapChart(productTreemap) {
   const phoneLayout = isPhoneLayout();
+  const sortedTreemap = sortTreemapNodes(productTreemap, state.chartDisplay.treemap);
 
   state.charts.treemap.setOption(
     {
@@ -1336,10 +1504,10 @@ function renderTreemapChart(productTreemap) {
               },
             },
           ],
-          data: productTreemap,
+          data: sortedTreemap,
         },
       ],
-      graphic: !productTreemap.length
+      graphic: !sortedTreemap.length
         ? [
             {
               type: "text",
@@ -1361,7 +1529,8 @@ function renderTreemapChart(productTreemap) {
 
 function renderTopHoldingsChart(topHoldings) {
   const phoneLayout = isPhoneLayout();
-  const chartItems = topHoldings.map((item) => ({
+  const ordered = orderTopHoldingsDisplay(topHoldings, state.chartDisplay.topHoldings);
+  const chartItems = ordered.map((item) => ({
     axisLabel: truncateText(item.axisLabel, phoneLayout ? 16 : 28),
     record: item.record,
   }));
@@ -1795,8 +1964,35 @@ function hasActiveFilters() {
   return Object.keys(FILTER_KEYS).some((filterKey) => state.filters[filterKey].length > 0);
 }
 
-function countMatchingRecords(key, value) {
-  return state.records.filter((record) => record[key] === value).length;
+function passesFiltersExcept(record, excludeFilterKey) {
+  if (excludeFilterKey !== "owners" && state.filters.owners.length && !state.filters.owners.includes(record.owner)) {
+    return false;
+  }
+
+  if (
+    excludeFilterKey !== "institutions" &&
+    state.filters.institutions.length &&
+    !state.filters.institutions.includes(record.institution)
+  ) {
+    return false;
+  }
+
+  if (excludeFilterKey !== "products" && state.filters.products.length && !state.filters.products.includes(record.product)) {
+    return false;
+  }
+
+  if (excludeFilterKey !== "tracks" && state.filters.tracks.length && !state.filters.tracks.includes(record.track)) {
+    return false;
+  }
+
+  return true;
+}
+
+function countFacetedRecords(filterKey, optionValue) {
+  const recordKey = FILTER_KEYS[filterKey];
+  return state.records.filter(
+    (record) => record[recordKey] === optionValue && passesFiltersExcept(record, filterKey)
+  ).length;
 }
 
 function getUniqueValues(records, property) {

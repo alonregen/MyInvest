@@ -284,7 +284,14 @@
                   <h3>מגמת צמיחה כוללת</h3>
                   <p id="growth-period-label" class="growth-period-label">מעלים קובץ כדי לראות את קו הצמיחה לאורך הזמן.</p>
                 </div>
-                <span class="chart-tip growth-tip">מבוסס על טבלת הצמיחה החדשה</span>
+                <div class="chart-card-actions">
+                  <label class="visually-hidden" for="chart-sort-growth">סדר ציר הזמן בתרשים</label>
+                  <select id="chart-sort-growth" class="chart-sort-select" aria-label="סדר ציר הזמן בתרשים" disabled>
+                    <option value="time-asc">זמן: מהישן לחדש</option>
+                    <option value="time-desc">זמן: מהחדש לישן</option>
+                  </select>
+                  <span class="chart-tip growth-tip">מבוסס על טבלת הצמיחה החדשה</span>
+                </div>
               </div>
 
               <div class="growth-metrics">
@@ -316,7 +323,15 @@
                   <p class="section-kicker">בעלות</p>
                   <h3>חלוקה לפי בעלים</h3>
                 </div>
-                <span class="chart-tip">לחיצה מוסיפה סינון</span>
+                <div class="chart-card-actions">
+                  <label class="visually-hidden" for="chart-sort-owner">מיון תרשים בעלות</label>
+                  <select id="chart-sort-owner" class="chart-sort-select" aria-label="מיון תרשים בעלות" disabled>
+                    <option value="value-desc">סכום: מהגדול לקטן</option>
+                    <option value="value-asc">סכום: מהקטן לגדול</option>
+                    <option value="name-asc">שם (א״ב)</option>
+                  </select>
+                  <span class="chart-tip">לחיצה מוסיפה סינון</span>
+                </div>
               </div>
               <div id="owner-chart" class="chart-canvas"></div>
             </article>
@@ -327,7 +342,15 @@
                   <p class="section-kicker">גופים</p>
                   <h3>דירוג לפי גוף מנהל</h3>
                 </div>
-                <span class="chart-tip">מהגדול לקטן</span>
+                <div class="chart-card-actions">
+                  <label class="visually-hidden" for="chart-sort-institution">מיון תרשים גופים</label>
+                  <select id="chart-sort-institution" class="chart-sort-select" aria-label="מיון תרשים גופים" disabled>
+                    <option value="value-desc">סכום: מהגדול לקטן</option>
+                    <option value="value-asc">סכום: מהקטן לגדול</option>
+                    <option value="name-asc">שם (א״ב)</option>
+                  </select>
+                  <span class="chart-tip">לחיצה מוסיפה סינון</span>
+                </div>
               </div>
               <div id="institution-chart" class="chart-canvas"></div>
             </article>
@@ -338,7 +361,15 @@
                   <p class="section-kicker">פיזור</p>
                   <h3>מפה לפי מוצר ומסלול</h3>
                 </div>
-                <span class="chart-tip">לחיצה על אריח יוצרת סינון</span>
+                <div class="chart-card-actions">
+                  <label class="visually-hidden" for="chart-sort-treemap">מיון מפת עץ</label>
+                  <select id="chart-sort-treemap" class="chart-sort-select" aria-label="מיון מפת עץ" disabled>
+                    <option value="value-desc">סכום: מהגדול לקטן</option>
+                    <option value="value-asc">סכום: מהקטן לגדול</option>
+                    <option value="name-asc">שם (א״ב)</option>
+                  </select>
+                  <span class="chart-tip">לחיצה על אריח יוצרת סינון</span>
+                </div>
               </div>
               <div id="treemap-chart" class="chart-canvas chart-canvas-tall"></div>
             </article>
@@ -349,7 +380,15 @@
                   <p class="section-kicker">מובילים</p>
                   <h3>החזקות מובילות</h3>
                 </div>
-                <span class="chart-tip">8 הרשומות הגדולות ביותר</span>
+                <div class="chart-card-actions">
+                  <label class="visually-hidden" for="chart-sort-top-holdings">מיון תרשים מובילים</label>
+                  <select id="chart-sort-top-holdings" class="chart-sort-select" aria-label="מיון תרשים מובילים" disabled>
+                    <option value="amount-desc">סכום: מהגדול לקטן</option>
+                    <option value="amount-asc">סכום: מהקטן לגדול</option>
+                    <option value="label-asc">תווית (א״ב)</option>
+                  </select>
+                  <span class="chart-tip">8 הרשומות הגדולות ביותר</span>
+                </div>
               </div>
               <div id="top-holdings-chart" class="chart-canvas chart-canvas-tall"></div>
             </article>

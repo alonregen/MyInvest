@@ -462,6 +462,43 @@ button {
   gap: 8px;
 }
 
+.chart-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.chart-card-actions .chart-tip {
+  flex-shrink: 0;
+}
+
+.chart-sort-select {
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(16, 37, 55, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  max-width: min(100%, 240px);
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(16, 37, 55, 0.04);
+}
+
+.chart-sort-select:focus-visible {
+  outline: 2px solid rgba(25, 140, 131, 0.45);
+  outline-offset: 2px;
+}
+
+.chart-sort-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .section-kicker {
   margin: 0 0 10px;
   font-size: 0.78rem;
@@ -1223,6 +1260,15 @@ code {
   .quick-filter-head,
   .chart-card-head {
     flex-direction: column;
+  }
+
+  .chart-card-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .chart-sort-select {
+    max-width: 100%;
   }
 
   .card-header-actions,
