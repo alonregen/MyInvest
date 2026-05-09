@@ -8,8 +8,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Explicit permissions deny everything else — artifact upload needs actions:write.
 permissions:
   contents: read
+  actions: write
   pages: write
   id-token: write
 
