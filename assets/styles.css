@@ -118,7 +118,24 @@ button {
   z-index: 1;
   width: min(1440px, calc(100vw - 40px));
   margin: 0 auto;
-  padding: calc(22px + var(--safe-top)) 0 calc(52px + var(--safe-bottom));
+  padding: calc(22px + var(--safe-top)) 0 calc(28px + var(--safe-bottom));
+}
+
+.site-disclaimer {
+  position: relative;
+  z-index: 1;
+  width: min(1440px, calc(100vw - 40px));
+  margin: 0 auto;
+  padding: 0 0 calc(36px + var(--safe-bottom));
+  text-align: center;
+}
+
+.site-disclaimer p {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--ink-muted);
+  letter-spacing: 0.01em;
 }
 
 .header-panel,
@@ -1782,6 +1799,26 @@ code {
 }
 
 @media (max-width: 640px) {
+  .hero-playground {
+    padding: 16px 14px 18px;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .hero-playground-head {
+    gap: 10px;
+  }
+
+  .hero-chart-canvas {
+    height: min(360px, 46vh);
+    min-height: 260px;
+  }
+
+  .hero-summary-card {
+    max-height: min(360px, 42vh);
+    padding: 10px 12px;
+  }
+
   .header-copy,
   .header-side,
   .dashboard-content,

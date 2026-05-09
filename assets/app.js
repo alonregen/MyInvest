@@ -1268,15 +1268,6 @@ function ensureCharts() {
       renderDashboard();
     });
 
-    state.charts.hero?.on("click", (params) => {
-      const filterKey = state.heroBreakdown;
-
-      if (params?.data?.filterValue && Object.hasOwn(FILTER_KEYS, filterKey)) {
-        toggleArrayFilter(filterKey, params.data.filterValue);
-        renderFilterControls();
-        renderDashboard();
-      }
-    });
   }
 }
 
@@ -1632,8 +1623,10 @@ function renderHeroPie(viewModel) {
       color: CHART_COLORS,
       tooltip: {
         trigger: "item",
-        formatter: ({ name, value, percent }) =>
-          `${name}<br>${formatCurrency(value)}<br>${percentFormatter.format(percent / 100)} מהשווי בתצוגה המסוננת`,
+        triggerOn: phoneLayout ? "mousemove|click" : "mousemove",
+        confine: true,
+        formatter: ({ name, percent }) =>
+          `${name}<br>${percentFormatter.format(percent / 100)}`,
       },
       title: {
         text: dimLabel ? `פיזור לפי ${dimLabel}` : "",
@@ -1645,15 +1638,34 @@ function renderHeroPie(viewModel) {
           fontWeight: 700,
         },
       },
-      legend: {
-        bottom: 0,
-        type: "scroll",
-        icon: "circle",
-        textStyle: {
-          color: "#4A6171",
-          fontSize: phoneLayout ? 11 : 12,
-        },
-      },
+      legend: phoneLayout
+        ? {
+            type: "scroll",
+            orient: "vertical",
+            selectedMode: false,
+            right: 6,
+            top: "middle",
+            height: "70%",
+            icon: "circle",
+            itemWidth: 10,
+            itemGap: 8,
+            pageIconSize: 11,
+            pageButtonGap: 6,
+            textStyle: {
+              color: "#4A6171",
+              fontSize: 10,
+            },
+          }
+        : {
+            bottom: 0,
+            type: "scroll",
+            selectedMode: false,
+            icon: "circle",
+            textStyle: {
+              color: "#4A6171",
+              fontSize: 12,
+            },
+          },
       graphic: [
         ...(hasData
           ? [
@@ -1686,8 +1698,9 @@ function renderHeroPie(viewModel) {
       series: [
         {
           type: "pie",
-          radius: phoneLayout ? ["38%", "58%"] : ["44%", "68%"],
-          center: ["50%", phoneLayout ? "46%" : "48%"],
+          selectedMode: false,
+          radius: phoneLayout ? ["34%", "54%"] : ["44%", "68%"],
+          center: phoneLayout ? ["42%", "50%"] : ["50%", "48%"],
           avoidLabelOverlap: !phoneLayout,
           label: {
             show: !phoneLayout,
