@@ -4,7 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#163147" />
-    <title>Dashboard חסכונות פרטי</title>
+    <meta
+      name="description"
+      content="מרכז החסכונות עם מפה מלאה ונוחה, טעינה מקומית של Excel ושמירה על הפרטיות."
+    />
+    <title>מרכז החסכונות</title>
     <link rel="stylesheet" href="assets/styles.css" />
   </head>
   <body>
@@ -15,24 +19,29 @@
     </div>
 
     <main class="page-shell">
-      <section class="hero-panel">
-        <div class="hero-copy">
-          <p class="eyebrow">PRIVATE SAVINGS COCKPIT</p>
-          <h1>מרכז שליטה ויזואלי לחסכונות שלכם</h1>
-          <p class="hero-lead">
-            מעלים את קובץ ה־Excel, מקבלים דשבורד אינטראקטיבי בסגנון
-            פרזנטציה, וכל זה נשאר מקומי בדפדפן בלבד.
-          </p>
+      <section class="header-panel">
+        <div class="header-copy">
+          <div class="header-title-block">
+            <p class="section-kicker section-kicker-light">דשבורד אישי</p>
+            <h1>מרכז החסכונות</h1>
+            <p class="header-lead">החסכונות שלי מפה מלאה ונוחה</p>
+          </div>
 
-          <div class="hero-badges">
-            <span>GitHub Pages</span>
+          <div class="header-trust-row">
+            <span>דפדפן בלבד</span>
             <span>ללא שרת</span>
-            <span>עיבוד מקומי בלבד</span>
+            <span>שומר על הפרטיות</span>
           </div>
         </div>
 
-        <div class="upload-card">
-          <div class="upload-zone" id="drop-zone">
+        <div class="header-side">
+          <div
+            class="upload-zone"
+            id="drop-zone"
+            role="button"
+            tabindex="0"
+            aria-label="טעינת קובץ Excel מקומי"
+          >
             <input
               id="file-input"
               class="visually-hidden"
@@ -41,25 +50,31 @@
               aria-hidden="true"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             />
-            <div class="upload-mark">XLSX</div>
-            <h2>העלאת קובץ חסכונות</h2>
-            <p>גררו לכאן את הקובץ או לחצו לבחירה. המערכת מצפה ל־<code>sheet1</code> במבנה החודשי הקבוע.</p>
-            <button id="upload-trigger" class="primary-button" type="button">בחירת קובץ</button>
-            <p class="upload-note">הקובץ לא עוזב את הדפדפן ולא נשמר בשום מקום.</p>
+
+            <div class="upload-badge">XLSX</div>
+
+            <div class="upload-copy">
+              <h2>העלאת קובץ</h2>
+              <p>גררו או לחצו לבחירה. הקריאה מתבצעת מקומית בלבד מתוך <code>sheet1</code>.</p>
+            </div>
+
+            <div class="upload-actions">
+              <button id="upload-trigger" class="primary-button" type="button">טעינת קובץ</button>
+              <button id="download-template" class="secondary-button ghost-button" type="button">
+                הורדת תבנית XLSX
+              </button>
+              <p class="upload-helper">מורידים את התבנית, ממלאים באקסל, שומרים ומעלים חזרה לדשבורד.</p>
+            </div>
           </div>
 
-          <dl class="upload-facts">
-            <div>
+          <dl class="header-facts">
+            <div class="fact-card">
               <dt>קובץ טעון</dt>
               <dd id="file-name">עדיין לא נבחר קובץ</dd>
             </div>
-            <div>
+            <div class="fact-card">
               <dt>תאריך עדכון</dt>
               <dd id="update-date">ממתין לטעינה</dd>
-            </div>
-            <div>
-              <dt>סכום מדווח</dt>
-              <dd id="declared-total">ממתין לטעינה</dd>
             </div>
           </dl>
         </div>
@@ -77,79 +92,138 @@
         <div id="mobile-filter-backdrop" class="mobile-filter-backdrop" aria-hidden="true"></div>
 
         <aside id="filters-card" class="filters-card" aria-label="פאנל מסננים">
-          <div class="card-header">
-            <div>
-              <p class="section-kicker">SMART FILTERS</p>
-              <h2>סינון חכם</h2>
+          <div class="filters-card-header">
+            <div class="card-header">
+              <div>
+                <p class="section-kicker">פאנל צד</p>
+                <h2>מסנני פיזור</h2>
+              </div>
+              <div class="card-header-actions">
+                <span id="filters-active-summary" class="group-meta filter-card-status">0 פעילים</span>
+                <button id="clear-filters" class="secondary-button" type="button" disabled>
+                  ניקוי
+                </button>
+                <button id="mobile-filter-close" class="secondary-button mobile-filter-close" type="button">
+                  סגירה
+                </button>
+              </div>
             </div>
-            <div class="card-header-actions">
-              <button id="clear-filters" class="secondary-button" type="button" disabled>
-                ניקוי כל המסננים
+          </div>
+
+          <div class="filters-card-body">
+            <section id="quick-section" class="filter-section" data-filter-section="quick">
+              <button
+                id="quick-section-toggle"
+                class="filter-section-toggle"
+                type="button"
+                data-section-toggle="quick"
+                aria-expanded="true"
+                aria-controls="quick-section-panel"
+              >
+                <span class="filter-section-copy">
+                  <span class="filter-section-title">בחירה מהירה</span>
+                  <span class="filter-section-hint">מוצר ומסלול לקפיצה מהירה בין תצוגות</span>
+                </span>
+                <span class="filter-section-toggle-meta">
+                  <span id="quick-section-count" class="group-meta group-count">0/0</span>
+                  <span class="filter-section-arrow" aria-hidden="true"></span>
+                </span>
               </button>
-              <button id="mobile-filter-close" class="secondary-button mobile-filter-close" type="button">
-                סגירה
+
+              <div id="quick-section-panel" class="filter-section-panel">
+                <div class="side-quick-filters">
+                  <article class="quick-filter-group">
+                    <div class="quick-filter-head">
+                      <div>
+                        <h3>מוצר</h3>
+                        <p>בחירה מהירה של סוג החיסכון</p>
+                      </div>
+                      <span id="products-top-count" class="group-meta group-count">0/0</span>
+                    </div>
+                    <div id="products-top-filter" class="quick-filter-rail"></div>
+                  </article>
+
+                  <article class="quick-filter-group">
+                    <div class="quick-filter-head">
+                      <div>
+                        <h3>מסלול</h3>
+                        <p>מעבר מהיר בין מסלולי ההשקעה</p>
+                      </div>
+                      <span id="tracks-top-count" class="group-meta group-count">0/0</span>
+                    </div>
+                    <div id="tracks-top-filter" class="quick-filter-rail"></div>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <section id="owners-section" class="filter-section is-collapsed" data-filter-section="owners">
+              <button
+                id="owners-section-toggle"
+                class="filter-section-toggle"
+                type="button"
+                data-section-toggle="owners"
+                aria-expanded="false"
+                aria-controls="owners-section-panel"
+              >
+                <span class="filter-section-copy">
+                  <span class="filter-section-title">אצל מי</span>
+                  <span class="filter-section-hint">חלוקה לפי בעלים ומשקיעים</span>
+                </span>
+                <span class="filter-section-toggle-meta">
+                  <span id="owners-count" class="group-meta group-count">0/0</span>
+                  <span class="filter-section-arrow" aria-hidden="true"></span>
+                </span>
               </button>
-            </div>
-          </div>
 
-          <div class="search-panel">
-            <label class="field-label" for="search-input">חיפוש חופשי</label>
-            <input id="search-input" class="text-field" type="search" placeholder="מוצר, מסלול, מקום או שם" />
-          </div>
+              <div id="owners-section-panel" class="filter-section-panel" aria-hidden="true" hidden>
+                <div class="filter-group compact-filter-group">
+                  <div id="owners-filter" class="pill-grid"></div>
+                </div>
+              </div>
+            </section>
 
-          <div class="range-panel">
-            <div>
-              <label class="field-label" for="min-amount">סכום מינימלי</label>
-              <input id="min-amount" class="text-field" type="number" min="0" step="1" placeholder="0" />
-            </div>
-            <div>
-              <label class="field-label" for="max-amount">סכום מקסימלי</label>
-              <input id="max-amount" class="text-field" type="number" min="0" step="1" placeholder="ללא תקרה" />
-            </div>
-          </div>
+            <section
+              id="institutions-section"
+              class="filter-section is-collapsed"
+              data-filter-section="institutions"
+            >
+              <button
+                id="institutions-section-toggle"
+                class="filter-section-toggle"
+                type="button"
+                data-section-toggle="institutions"
+                aria-expanded="false"
+                aria-controls="institutions-section-panel"
+              >
+                <span class="filter-section-copy">
+                  <span class="filter-section-title">איפה</span>
+                  <span class="filter-section-hint">חלוקה לפי גוף מנהל או מוסד</span>
+                </span>
+                <span class="filter-section-toggle-meta">
+                  <span id="institutions-count" class="group-meta group-count">0/0</span>
+                  <span class="filter-section-arrow" aria-hidden="true"></span>
+                </span>
+              </button>
 
-          <div class="filter-group">
-            <div class="group-title-row">
-              <h3>אצל מי</h3>
-              <span id="owners-count" class="group-meta">0 אפשרויות</span>
-            </div>
-            <div id="owners-filter" class="pill-grid"></div>
-          </div>
-
-          <div class="filter-group">
-            <div class="group-title-row">
-              <h3>איפה</h3>
-              <span id="institutions-count" class="group-meta">0 אפשרויות</span>
-            </div>
-            <div id="institutions-filter" class="pill-grid"></div>
-          </div>
-
-          <div class="filter-group">
-            <div class="group-title-row">
-              <h3>מוצר</h3>
-              <span id="products-count" class="group-meta">0 אפשרויות</span>
-            </div>
-            <div id="products-filter" class="pill-grid"></div>
-          </div>
-
-          <div class="filter-group">
-            <div class="group-title-row">
-              <h3>מסלול</h3>
-              <span id="tracks-count" class="group-meta">0 אפשרויות</span>
-            </div>
-            <div id="tracks-filter" class="pill-grid"></div>
+              <div id="institutions-section-panel" class="filter-section-panel" aria-hidden="true" hidden>
+                <div class="filter-group compact-filter-group">
+                  <div id="institutions-filter" class="pill-grid"></div>
+                </div>
+              </div>
+            </section>
           </div>
         </aside>
 
         <section class="dashboard-content">
           <div class="dashboard-topline">
             <div>
-              <p class="section-kicker">LIVE SNAPSHOT</p>
-              <h2>הצילום הפיננסי שלכם</h2>
+              <p class="section-kicker">תמונת מצב</p>
+              <h2>פיזור הכסף כרגע</h2>
             </div>
             <div class="data-privacy-callout">
-              <strong>Privacy:</strong>
-              <span>הנתונים נטענים לזיכרון הדפדפן בלבד ולא נשלחים לרשת.</span>
+              <strong>פרטיות מלאה</strong>
+              <span>הקובץ נטען לזיכרון הדפדפן בלבד ולא נשלח לשום שירות.</span>
             </div>
           </div>
 
@@ -178,17 +252,17 @@
             <article class="kpi-card">
               <p>שווי מסונן</p>
               <strong id="kpi-total">₪0</strong>
-              <span>סכום כל הרשומות אחרי סינון</span>
+              <span>הסכום הכולל של התצוגה הנוכחית</span>
             </article>
             <article class="kpi-card">
               <p>מספר החזקות</p>
               <strong id="kpi-holdings">0</strong>
-              <span>כמה רשומות פעילות מוצגות כרגע</span>
+              <span>כמה רשומות מוצגות כרגע</span>
             </article>
             <article class="kpi-card">
               <p>גופים פעילים</p>
               <strong id="kpi-institutions">0</strong>
-              <span>מספר מוסדות שונים בתצוגה הנוכחית</span>
+              <span>מספר הגופים הייחודיים בתצוגה</span>
             </article>
             <article class="kpi-card">
               <p>החזקה הגדולה ביותר</p>
@@ -203,10 +277,43 @@
           </section>
 
           <section class="chart-grid">
+            <article class="chart-card chart-card-wide growth-spotlight">
+              <div class="chart-card-head growth-head">
+                <div>
+                  <p class="section-kicker">צמיחה</p>
+                  <h3>מגמת צמיחה כוללת</h3>
+                  <p id="growth-period-label" class="growth-period-label">מעלים קובץ כדי לראות את קו הצמיחה לאורך הזמן.</p>
+                </div>
+                <span class="chart-tip growth-tip">מבוסס על טבלת הצמיחה החדשה</span>
+              </div>
+
+              <div class="growth-metrics">
+                <article class="growth-metric growth-metric-primary">
+                  <p>שווי נוכחי</p>
+                  <strong id="growth-current-total">₪0</strong>
+                  <span id="growth-current-date">ממתין לטעינה</span>
+                </article>
+
+                <article class="growth-metric">
+                  <p>עלייה נטו</p>
+                  <strong id="growth-net-change">₪0</strong>
+                  <span id="growth-net-change-label">לעומת הנתון הקודם</span>
+                </article>
+
+                <article class="growth-metric">
+                  <p>קצב צמיחה</p>
+                  <strong id="growth-percent-change">0%</strong>
+                  <span id="growth-percent-change-label">שינוי מצטבר בין התקופות</span>
+                </article>
+              </div>
+
+              <div id="growth-chart" class="chart-canvas chart-canvas-growth"></div>
+            </article>
+
             <article class="chart-card">
               <div class="chart-card-head">
                 <div>
-                  <p class="section-kicker">OWNERS</p>
+                  <p class="section-kicker">בעלות</p>
                   <h3>חלוקה לפי בעלים</h3>
                 </div>
                 <span class="chart-tip">לחיצה מוסיפה סינון</span>
@@ -217,10 +324,10 @@
             <article class="chart-card">
               <div class="chart-card-head">
                 <div>
-                  <p class="section-kicker">INSTITUTIONS</p>
+                  <p class="section-kicker">גופים</p>
                   <h3>דירוג לפי גוף מנהל</h3>
                 </div>
-                <span class="chart-tip">מדורג מהגדול לקטן</span>
+                <span class="chart-tip">מהגדול לקטן</span>
               </div>
               <div id="institution-chart" class="chart-canvas"></div>
             </article>
@@ -228,10 +335,10 @@
             <article class="chart-card chart-card-wide">
               <div class="chart-card-head">
                 <div>
-                  <p class="section-kicker">PRODUCT MIX</p>
-                  <h3>Treemap של מוצר ומסלול</h3>
+                  <p class="section-kicker">פיזור</p>
+                  <h3>מפה לפי מוצר ומסלול</h3>
                 </div>
-                <span class="chart-tip">לחיצה על ריבוע יוצרת סינון</span>
+                <span class="chart-tip">לחיצה על אריח יוצרת סינון</span>
               </div>
               <div id="treemap-chart" class="chart-canvas chart-canvas-tall"></div>
             </article>
@@ -239,10 +346,10 @@
             <article class="chart-card chart-card-wide">
               <div class="chart-card-head">
                 <div>
-                  <p class="section-kicker">TOP HOLDINGS</p>
+                  <p class="section-kicker">מובילים</p>
                   <h3>החזקות מובילות</h3>
                 </div>
-                <span class="chart-tip">הגרף מציג את 8 הרשומות הגדולות</span>
+                <span class="chart-tip">8 הרשומות הגדולות ביותר</span>
               </div>
               <div id="top-holdings-chart" class="chart-canvas chart-canvas-tall"></div>
             </article>
@@ -251,7 +358,7 @@
           <section id="details-section" class="table-card">
             <div class="table-card-head">
               <div>
-                <p class="section-kicker">DETAIL TABLE</p>
+                <p class="section-kicker">פירוט מלא</p>
                 <h3>רשומות מפורטות</h3>
                 <p id="table-summary" class="table-summary">0 רשומות מוצגות</p>
                 <p class="table-hint">ב־iPhone אפשר לגלול ימינה ושמאלה כדי לראות את כל העמודות.</p>

@@ -10,10 +10,8 @@ const FILTER_LABELS = {
   institutions: "איפה",
   products: "מוצר",
   tracks: "מסלול",
-  searchText: "חיפוש",
-  minAmount: "מינימום",
-  maxAmount: "מקסימום",
 };
+const FILTER_SECTION_KEYS = ["quick", "owners", "institutions"];
 const CHART_COLORS = ["#163147", "#198C83", "#D39A39", "#DE7655", "#7D90A5", "#4F6D7A", "#B56348", "#9DB8B4"];
 
 const collator = new Intl.Collator("he-IL", {
@@ -41,6 +39,15 @@ const shortDateFormatter = new Intl.DateTimeFormat("he-IL", {
   month: "2-digit",
   day: "2-digit",
 });
+const shortMonthFormatter = new Intl.DateTimeFormat("he-IL", {
+  month: "short",
+  year: "2-digit",
+});
+const chartDateFormatter = new Intl.DateTimeFormat("he-IL", {
+  day: "2-digit",
+  month: "2-digit",
+});
+const DEFAULT_DOCUMENT_TITLE = "מרכז החסכונות";
 
 const state = {
   meta: null,
@@ -55,17 +62,23 @@ const state = {
   charts: {},
   ui: {
     mobileFiltersOpen: false,
+    collapsedSections: {
+      quick: false,
+      owners: true,
+      institutions: true,
+    },
   },
 };
 
 const dom = {
   fileInput: document.getElementById("file-input"),
   uploadTrigger: document.getElementById("upload-trigger"),
+  downloadTemplate: document.getElementById("download-template"),
   dropZone: document.getElementById("drop-zone"),
   filtersCard: document.getElementById("filters-card"),
+  filtersActiveSummary: document.getElementById("filters-active-summary"),
   fileName: document.getElementById("file-name"),
   updateDate: document.getElementById("update-date"),
-  declaredTotal: document.getElementById("declared-total"),
   dashboardShell: document.getElementById("dashboard-shell"),
   mobileFilterBackdrop: document.getElementById("mobile-filter-backdrop"),
   mobileFilterToggle: document.getElementById("mobile-filter-toggle"),
@@ -77,21 +90,36 @@ const dom = {
   warningBanner: document.getElementById("warning-banner"),
   successBanner: document.getElementById("success-banner"),
   clearFilters: document.getElementById("clear-filters"),
-  searchInput: document.getElementById("search-input"),
-  minAmount: document.getElementById("min-amount"),
-  maxAmount: document.getElementById("max-amount"),
+  quickSection: document.getElementById("quick-section"),
+  quickSectionToggle: document.getElementById("quick-section-toggle"),
+  quickSectionPanel: document.getElementById("quick-section-panel"),
+  quickSectionCount: document.getElementById("quick-section-count"),
+  ownersSection: document.getElementById("owners-section"),
+  ownersSectionToggle: document.getElementById("owners-section-toggle"),
+  ownersSectionPanel: document.getElementById("owners-section-panel"),
+  institutionsSection: document.getElementById("institutions-section"),
+  institutionsSectionToggle: document.getElementById("institutions-section-toggle"),
+  institutionsSectionPanel: document.getElementById("institutions-section-panel"),
   ownersFilter: document.getElementById("owners-filter"),
   institutionsFilter: document.getElementById("institutions-filter"),
-  productsFilter: document.getElementById("products-filter"),
-  tracksFilter: document.getElementById("tracks-filter"),
+  productsTopFilter: document.getElementById("products-top-filter"),
+  tracksTopFilter: document.getElementById("tracks-top-filter"),
   ownersCount: document.getElementById("owners-count"),
   institutionsCount: document.getElementById("institutions-count"),
-  productsCount: document.getElementById("products-count"),
-  tracksCount: document.getElementById("tracks-count"),
+  productsTopCount: document.getElementById("products-top-count"),
+  tracksTopCount: document.getElementById("tracks-top-count"),
   activeFilterChips: document.getElementById("active-filter-chips"),
   tableBody: document.getElementById("table-body"),
   tableSummary: document.getElementById("table-summary"),
   exportCsv: document.getElementById("export-csv"),
+  growthChart: document.getElementById("growth-chart"),
+  growthPeriodLabel: document.getElementById("growth-period-label"),
+  growthCurrentTotal: document.getElementById("growth-current-total"),
+  growthCurrentDate: document.getElementById("growth-current-date"),
+  growthNetChange: document.getElementById("growth-net-change"),
+  growthNetChangeLabel: document.getElementById("growth-net-change-label"),
+  growthPercentChange: document.getElementById("growth-percent-change"),
+  growthPercentChangeLabel: document.getElementById("growth-percent-change-label"),
   ownerChart: document.getElementById("owner-chart"),
   institutionChart: document.getElementById("institution-chart"),
   treemapChart: document.getElementById("treemap-chart"),
@@ -120,10 +148,18 @@ bootstrap();
 function bootstrap() {
   dom.uploadTrigger.addEventListener("click", () => dom.fileInput.click());
   dom.dropZone.addEventListener("click", (event) => {
-    if (event.target.closest("button")) {
+    if (event.target.closest("button, .upload-actions")) {
       return;
     }
 
+    dom.fileInput.click();
+  });
+  dom.dropZone.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
     dom.fileInput.click();
   });
   dom.fileInput.addEventListener("change", async (event) => {
@@ -134,6 +170,9 @@ function bootstrap() {
     }
 
     dom.fileInput.value = "";
+  });
+  dom.downloadTemplate.addEventListener("click", () => {
+    downloadTemplateWorkbook();
   });
 
   ["dragenter", "dragover"].forEach((eventName) => {
@@ -158,24 +197,22 @@ function bootstrap() {
     }
   });
 
-  dom.searchInput.addEventListener("input", (event) => {
-    state.filters.searchText = event.target.value.trim();
-    renderDashboard();
-  });
-
-  dom.minAmount.addEventListener("input", (event) => {
-    state.filters.minAmount = event.target.value;
-    renderDashboard();
-  });
-
-  dom.maxAmount.addEventListener("input", (event) => {
-    state.filters.maxAmount = event.target.value;
-    renderDashboard();
-  });
-
   dom.clearFilters.addEventListener("click", () => {
     resetFilters();
+    renderFilterControls();
     renderDashboard();
+  });
+
+  FILTER_SECTION_KEYS.forEach((sectionKey) => {
+    const toggle = dom[`${sectionKey}SectionToggle`];
+
+    if (!toggle) {
+      return;
+    }
+
+    toggle.addEventListener("click", () => {
+      toggleFilterSection(sectionKey);
+    });
   });
 
   dom.mobileFilterToggle.addEventListener("click", () => {
@@ -278,7 +315,7 @@ async function handleFile(file) {
 
     setBanner(
       dom.successBanner,
-      `נטענו ${numberFormatter.format(state.records.length)} רשומות מתוך sheet1. הנתונים נשארים בדפדפן בלבד.`,
+      `נטענו ${numberFormatter.format(state.records.length)} רשומות מ־sheet1. הנתונים נשארים בדפדפן בלבד.`,
       "success"
     );
 
@@ -318,6 +355,7 @@ function parseWorkbook(fileBuffer, sourceFileName) {
 
   const updateDate = normalizeDateValue(readSheetValue(worksheet, "P4"));
   const declaredTotal = toNumber(readSheetValue(worksheet, "P5"));
+  const growth = parseGrowthMeta(worksheet, updateDate, declaredTotal);
   const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
   const warnings = [];
   const records = [];
@@ -371,9 +409,98 @@ function parseWorkbook(fileBuffer, sourceFileName) {
       updateDate,
       declaredTotal,
       computedTotal,
+      growth,
     },
     records,
     warnings,
+  };
+}
+
+function parseGrowthMeta(worksheet, updateDate, declaredTotal) {
+  const previousTotalCell = toNumber(readSheetValue(worksheet, "P7"));
+  const percentChangeCell = toNumber(readSheetValue(worksheet, "P8"));
+  const netChangeCell = toNumber(readSheetValue(worksheet, "P9"));
+  const history = [];
+  let emptyStreak = 0;
+
+  for (let rowIndex = 13; rowIndex < 80; rowIndex += 1) {
+    const dateValue = normalizeDateValue(readSheetValue(worksheet, `O${rowIndex + 1}`));
+    const totalValue = toNumber(readSheetValue(worksheet, `P${rowIndex + 1}`));
+
+    if (!dateValue && !Number.isFinite(totalValue)) {
+      emptyStreak += 1;
+
+      if (emptyStreak >= 3 && history.length) {
+        break;
+      }
+
+      continue;
+    }
+
+    emptyStreak = 0;
+
+    if (!dateValue || !Number.isFinite(totalValue)) {
+      continue;
+    }
+
+    history.push({
+      date: dateValue,
+      total: totalValue,
+      source: "history",
+    });
+  }
+
+  if (updateDate && Number.isFinite(declaredTotal)) {
+    const lastPoint = history[history.length - 1];
+
+    if (!lastPoint || lastPoint.date !== updateDate || Math.abs(lastPoint.total - declaredTotal) > 0.1) {
+      history.push({
+        date: updateDate,
+        total: declaredTotal,
+        source: "current",
+      });
+    }
+  }
+
+  history.sort((left, right) => left.date.localeCompare(right.date));
+
+  const distinctHistory = history.filter((point, index) => {
+    if (index === 0) {
+      return true;
+    }
+
+    const previous = history[index - 1];
+    return previous.date !== point.date || Math.abs(previous.total - point.total) > 0.1;
+  });
+
+  const previousTotal = Number.isFinite(previousTotalCell)
+    ? previousTotalCell
+    : distinctHistory.length > 1
+      ? distinctHistory[distinctHistory.length - 2].total
+      : NaN;
+  const currentTotal = Number.isFinite(declaredTotal)
+    ? declaredTotal
+    : distinctHistory.length
+      ? distinctHistory[distinctHistory.length - 1].total
+      : NaN;
+  const netChange = Number.isFinite(netChangeCell)
+    ? netChangeCell
+    : Number.isFinite(previousTotal) && Number.isFinite(currentTotal)
+      ? currentTotal - previousTotal
+      : NaN;
+  const percentChange = Number.isFinite(percentChangeCell)
+    ? percentChangeCell
+    : Number.isFinite(previousTotal) && previousTotal !== 0 && Number.isFinite(currentTotal)
+      ? ((currentTotal - previousTotal) / previousTotal) * 100
+      : NaN;
+
+  return {
+    history: distinctHistory,
+    currentDate: updateDate,
+    currentTotal,
+    previousTotal,
+    netChange,
+    percentChange,
   };
 }
 
@@ -471,6 +598,7 @@ function renderDashboard() {
     dom.kpiLargestLabel.textContent = "מעלים קובץ כדי להתחיל";
     dom.kpiOwnerShare.textContent = "0%";
     dom.kpiOwnerShareLabel.textContent = "ממתין לטעינה";
+    renderGrowthStory(null);
     renderTable([]);
     renderFilterChips();
     renderEmptyCharts();
@@ -487,6 +615,7 @@ function renderDashboard() {
   state.filteredRecords = sortedRecords;
 
   renderKpis(viewModel);
+  renderGrowthStory(state.meta?.growth || null);
   renderFilterChips();
   renderTable(sortedRecords);
   renderCharts(viewModel);
@@ -502,15 +631,13 @@ function renderFileMeta() {
   if (!state.meta) {
     dom.fileName.textContent = "עדיין לא נבחר קובץ";
     dom.updateDate.textContent = "ממתין לטעינה";
-    dom.declaredTotal.textContent = "ממתין לטעינה";
+    syncDocumentTitle();
     return;
   }
 
   dom.fileName.textContent = state.meta.sourceFileName || "קובץ XLSX מקומי";
   dom.updateDate.textContent = state.meta.updateDate ? formatDisplayDate(state.meta.updateDate) : "לא זוהה";
-  dom.declaredTotal.textContent = Number.isFinite(state.meta.declaredTotal)
-    ? formatCurrency(state.meta.declaredTotal)
-    : "לא זוהה";
+  syncDocumentTitle();
 }
 
 function renderFilterControls() {
@@ -521,27 +648,40 @@ function renderFilterControls() {
     tracks: getUniqueValues(state.records, "track"),
   };
 
-  renderFilterPills("owners", options.owners, dom.ownersFilter, dom.ownersCount);
-  renderFilterPills("institutions", options.institutions, dom.institutionsFilter, dom.institutionsCount);
-  renderFilterPills("products", options.products, dom.productsFilter, dom.productsCount);
-  renderFilterPills("tracks", options.tracks, dom.tracksFilter, dom.tracksCount);
+  const ownersMeta = renderFilterPills("owners", options.owners, dom.ownersFilter, dom.ownersCount);
+  const institutionsMeta = renderFilterPills(
+    "institutions",
+    options.institutions,
+    dom.institutionsFilter,
+    dom.institutionsCount
+  );
+  const productsMeta = renderQuickFilterRail("products", options.products, dom.productsTopFilter, dom.productsTopCount);
+  const tracksMeta = renderQuickFilterRail("tracks", options.tracks, dom.tracksTopFilter, dom.tracksTopCount);
 
-  dom.searchInput.value = state.filters.searchText;
-  dom.minAmount.value = state.filters.minAmount;
-  dom.maxAmount.value = state.filters.maxAmount;
+  renderFilterSectionSummary({
+    owners: ownersMeta,
+    institutions: institutionsMeta,
+    products: productsMeta,
+    tracks: tracksMeta,
+  });
+  syncFilterSectionState();
   syncMobileFilterUi();
 }
 
 function renderFilterPills(filterKey, options, container, counterElement) {
   container.textContent = "";
-  counterElement.textContent = `${numberFormatter.format(options.length)} אפשרויות`;
+  const selectedCount = getSelectedOptionCount(filterKey, options);
+  setGroupCount(counterElement, selectedCount, options.length);
 
   if (!options.length) {
     const empty = document.createElement("span");
     empty.className = "group-meta";
     empty.textContent = "אין נתונים";
     container.appendChild(empty);
-    return;
+    return {
+      selectedCount: 0,
+      totalCount: 0,
+    };
   }
 
   const fragment = document.createDocumentFragment();
@@ -577,6 +717,69 @@ function renderFilterPills(filterKey, options, container, counterElement) {
   });
 
   container.appendChild(fragment);
+
+  return {
+    selectedCount,
+    totalCount: options.length,
+  };
+}
+
+function renderQuickFilterRail(filterKey, options, container, counterElement) {
+  container.textContent = "";
+  const selectedCount = getSelectedOptionCount(filterKey, options);
+  setGroupCount(counterElement, selectedCount, options.length);
+
+  if (!options.length) {
+    const empty = document.createElement("span");
+    empty.className = "group-meta";
+    empty.textContent = "אין נתונים";
+    container.appendChild(empty);
+    return {
+      selectedCount: 0,
+      totalCount: 0,
+    };
+  }
+
+  const fragment = document.createDocumentFragment();
+  const selectedValues = state.filters[filterKey];
+
+  options.forEach((optionValue) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "quick-filter-chip";
+    button.dataset.filterKey = filterKey;
+    button.dataset.filterValue = optionValue;
+    button.setAttribute("aria-pressed", selectedValues.includes(optionValue) ? "true" : "false");
+
+    if (selectedValues.includes(optionValue)) {
+      button.classList.add("is-selected");
+    }
+
+    button.addEventListener("click", () => {
+      toggleArrayFilter(filterKey, optionValue);
+      renderFilterControls();
+      renderDashboard();
+    });
+
+    const nameNode = document.createElement("span");
+    nameNode.className = "quick-filter-chip-name";
+    nameNode.textContent = optionValue;
+    button.appendChild(nameNode);
+
+    const countNode = document.createElement("span");
+    countNode.className = "quick-filter-chip-count";
+    countNode.textContent = `${numberFormatter.format(countMatchingRecords(FILTER_KEYS[filterKey], optionValue))}`;
+    button.appendChild(countNode);
+
+    fragment.appendChild(button);
+  });
+
+  container.appendChild(fragment);
+
+  return {
+    selectedCount,
+    totalCount: options.length,
+  };
 }
 
 function renderFilterChips() {
@@ -628,30 +831,6 @@ function buildActiveFilterChips() {
     });
   });
 
-  if (state.filters.searchText) {
-    chips.push({
-      key: "searchText",
-      value: "",
-      label: `${FILTER_LABELS.searchText}: ${state.filters.searchText}`,
-    });
-  }
-
-  if (state.filters.minAmount !== "") {
-    chips.push({
-      key: "minAmount",
-      value: "",
-      label: `${FILTER_LABELS.minAmount}: ${formatCurrency(Number(state.filters.minAmount || 0))}`,
-    });
-  }
-
-  if (state.filters.maxAmount !== "") {
-    chips.push({
-      key: "maxAmount",
-      value: "",
-      label: `${FILTER_LABELS.maxAmount}: ${formatCurrency(Number(state.filters.maxAmount || 0))}`,
-    });
-  }
-
   return chips;
 }
 
@@ -667,6 +846,7 @@ function renderKpis(viewModel) {
 
 function renderCharts(viewModel) {
   ensureCharts();
+  renderGrowthChart(state.meta?.growth || null);
   renderOwnerChart(viewModel.ownerBreakdown);
   renderInstitutionChart(viewModel.institutionBreakdown);
   renderTreemapChart(viewModel.productTreemap);
@@ -701,6 +881,7 @@ function renderEmptyCharts() {
 
 function ensureCharts() {
   if (!state.charts.owner) {
+    state.charts.growth = echarts.init(dom.growthChart);
     state.charts.owner = echarts.init(dom.ownerChart);
     state.charts.institution = echarts.init(dom.institutionChart);
     state.charts.treemap = echarts.init(dom.treemapChart);
@@ -756,6 +937,201 @@ function ensureCharts() {
       renderDashboard();
     });
   }
+}
+
+function renderGrowthStory(growth) {
+  if (!growth || !growth.history.length) {
+    dom.growthPeriodLabel.textContent = "מעלים קובץ כדי לראות את קו הצמיחה לאורך הזמן.";
+    dom.growthCurrentTotal.textContent = formatCurrency(0);
+    dom.growthCurrentDate.textContent = "ממתין לטעינה";
+    dom.growthNetChange.textContent = formatCurrency(0);
+    dom.growthNetChangeLabel.textContent = "לעומת הנתון הקודם";
+    dom.growthPercentChange.textContent = "0%";
+    dom.growthPercentChangeLabel.textContent = "שינוי מצטבר בין התקופות";
+    return;
+  }
+
+  const firstPoint = growth.history[0];
+  const lastPoint = growth.history[growth.history.length - 1];
+  const comparisonDate = Number.isFinite(growth.previousTotal) && growth.history.length > 1
+    ? growth.history[growth.history.length - 2]?.date
+    : null;
+
+  dom.growthPeriodLabel.textContent = `מהלך צמיחה מ-${formatMonthLabel(firstPoint.date)} עד ${formatMonthLabel(lastPoint.date)}.`;
+  dom.growthCurrentTotal.textContent = formatCurrency(growth.currentTotal);
+  dom.growthCurrentDate.textContent = growth.currentDate ? `נכון ל־${formatDisplayDate(growth.currentDate)}` : "מעדכון אחרון";
+  dom.growthNetChange.textContent = formatSignedCurrency(growth.netChange);
+  dom.growthNetChangeLabel.textContent = comparisonDate
+    ? `לעומת ${formatMonthLabel(comparisonDate)}`
+    : "לעומת הנתון הקודם";
+  dom.growthPercentChange.textContent = formatGrowthPercent(growth.percentChange);
+  dom.growthPercentChangeLabel.textContent = Number.isFinite(growth.previousTotal)
+    ? `מול בסיס של ${formatCurrency(growth.previousTotal)}`
+    : "שינוי מצטבר בין התקופות";
+}
+
+function renderGrowthChart(growth) {
+  const phoneLayout = isPhoneLayout();
+  const seriesData = growth?.history || [];
+
+  state.charts.growth.setOption(
+    {
+      animationDuration: 650,
+      color: ["#198C83"],
+      grid: {
+        top: 24,
+        right: phoneLayout ? 10 : 18,
+        bottom: phoneLayout ? 30 : 42,
+        left: phoneLayout ? 54 : 70,
+        containLabel: true,
+      },
+      tooltip: {
+        trigger: "axis",
+        axisPointer: {
+          type: "line",
+          lineStyle: {
+            color: "rgba(25, 140, 131, 0.28)",
+            width: 2,
+          },
+        },
+        formatter: (params) => {
+          const item = params[0];
+          const point = item?.data?.point;
+
+          if (!point) {
+            return "";
+          }
+
+          const lines = [
+            `${formatDisplayDate(point.date)}`,
+            `${formatCurrency(point.total)}`,
+          ];
+
+          if (Number.isFinite(point.change)) {
+            lines.push(`שינוי: ${formatSignedCurrency(point.change)}`);
+          }
+
+          return lines.join("<br>");
+        },
+      },
+      xAxis: {
+        type: "category",
+        boundaryGap: false,
+        data: seriesData.map((point) => formatChartAxisDate(point.date)),
+        axisTick: {
+          show: false,
+        },
+        axisLine: {
+          lineStyle: {
+            color: "rgba(16, 37, 55, 0.14)",
+          },
+        },
+        axisLabel: {
+          color: "#4A6171",
+          fontSize: phoneLayout ? 11 : 12,
+        },
+      },
+      yAxis: {
+        type: "value",
+        axisLine: {
+          show: false,
+        },
+        axisTick: {
+          show: false,
+        },
+        splitLine: {
+          lineStyle: { color: "rgba(15, 36, 52, 0.08)" },
+        },
+        axisLabel: {
+          color: "#4A6171",
+          formatter: (value) => formatCompactCurrency(value),
+        },
+      },
+      series: [
+        {
+          type: "line",
+          smooth: true,
+          symbol: "circle",
+          symbolSize: phoneLayout ? 8 : 10,
+          lineStyle: {
+            width: 4,
+            shadowBlur: 14,
+            shadowColor: "rgba(25, 140, 131, 0.18)",
+          },
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: "rgba(25, 140, 131, 0.34)" },
+              { offset: 1, color: "rgba(25, 140, 131, 0.03)" },
+            ]),
+          },
+          emphasis: {
+            focus: "series",
+          },
+          label: {
+            show: !phoneLayout && seriesData.length > 0,
+            position: "top",
+            color: "#163147",
+            fontWeight: 700,
+            formatter: (params) => (params.dataIndex === seriesData.length - 1 ? formatCurrency(params.value) : ""),
+          },
+          data: seriesData.map((point, index) => ({
+            value: point.total,
+            point: {
+              ...point,
+              change: index > 0 ? point.total - seriesData[index - 1].total : NaN,
+            },
+            itemStyle: {
+              color: index === seriesData.length - 1 ? "#D39A39" : "#198C83",
+              borderColor: "#ffffff",
+              borderWidth: 2,
+            },
+          })),
+          markPoint: seriesData.length
+            ? {
+                symbol: "roundRect",
+                symbolSize: phoneLayout ? [92, 34] : [118, 38],
+                itemStyle: {
+                  color: "#163147",
+                  borderRadius: 18,
+                  shadowBlur: 16,
+                  shadowColor: "rgba(16, 39, 57, 0.2)",
+                },
+                label: {
+                  color: "#F9F6EF",
+                  fontWeight: 800,
+                  formatter: `כעת ${formatCurrency(seriesData[seriesData.length - 1].total)}`,
+                },
+                data: [
+                  {
+                    coord: [
+                      formatChartAxisDate(seriesData[seriesData.length - 1].date),
+                      seriesData[seriesData.length - 1].total,
+                    ],
+                    value: seriesData[seriesData.length - 1].total,
+                  },
+                ],
+              }
+            : undefined,
+        },
+      ],
+      graphic: !seriesData.length
+        ? [
+            {
+              type: "text",
+              left: "center",
+              top: "middle",
+              style: {
+                text: "לא נמצאו נתוני צמיחה בקובץ",
+                fill: "#4A6171",
+                fontSize: 15,
+                fontWeight: 600,
+              },
+            },
+          ]
+        : [],
+    },
+    true
+  );
 }
 
 function renderOwnerChart(ownerBreakdown) {
@@ -1237,10 +1613,6 @@ function buildSortLabel(key, direction) {
 }
 
 function applyFilters(records, filters) {
-  const searchTerm = normalizeText(filters.searchText);
-  const minAmount = filters.minAmount === "" ? null : Number(filters.minAmount);
-  const maxAmount = filters.maxAmount === "" ? null : Number(filters.maxAmount);
-
   return records.filter((record) => {
     if (filters.owners.length && !filters.owners.includes(record.owner)) {
       return false;
@@ -1256,21 +1628,6 @@ function applyFilters(records, filters) {
 
     if (filters.tracks.length && !filters.tracks.includes(record.track)) {
       return false;
-    }
-
-    if (Number.isFinite(minAmount) && record.amount < minAmount) {
-      return false;
-    }
-
-    if (Number.isFinite(maxAmount) && record.amount > maxAmount) {
-      return false;
-    }
-
-    if (searchTerm) {
-      const haystack = normalizeText([record.product, record.track, record.institution, record.owner].join(" "));
-      if (!haystack.includes(searchTerm)) {
-        return false;
-      }
     }
 
     return true;
@@ -1329,6 +1686,79 @@ function exportFilteredCsv() {
   URL.revokeObjectURL(url);
 }
 
+function downloadTemplateWorkbook() {
+  try {
+    if (!window.XLSX) {
+      throw new Error("ספריית Excel המקומית לא זמינה כרגע. רעננו את הדף ונסו שוב.");
+    }
+
+    const workbook = buildTemplateWorkbook();
+    XLSX.writeFile(workbook, "savings-dashboard-template.xlsx", {
+      compression: true,
+    });
+
+    clearBanner(dom.errorBanner);
+    setBanner(
+      dom.successBanner,
+      "תבנית XLSX ירדה בהצלחה. אפשר למלא, לשמור ולהעלות אותה חזרה לדשבורד.",
+      "success"
+    );
+  } catch (error) {
+    setBanner(dom.errorBanner, error.message || "לא ניתן היה ליצור את תבנית ה־XLSX.", "error");
+  }
+}
+
+function buildTemplateWorkbook() {
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet([["תיק השקעות"]]);
+
+  setSheetTextCell(worksheet, "A4", "מוצר");
+  setSheetTextCell(worksheet, "B4", "מסלול");
+  setSheetTextCell(worksheet, "C4", "סכום");
+  setSheetTextCell(worksheet, "D4", "איפה");
+  setSheetTextCell(worksheet, "E4", "אצל מי");
+  setSheetTextCell(worksheet, "F4", "הפקדות בתקופה");
+
+  setSheetTextCell(worksheet, "O4", "תאריך עדכון");
+  setSheetTextCell(worksheet, "O5", 'סה"כ');
+  setSheetTextCell(worksheet, "O7", "סכום קודם");
+  setSheetTextCell(worksheet, "O8", "אחוז עליה");
+  setSheetTextCell(worksheet, "O9", "נטו עליה");
+  setSheetTextCell(worksheet, "O13", "חודשים קודמים");
+  setSheetTextCell(worksheet, "O14", "YYYY-MM-DD");
+  setSheetTextCell(worksheet, "P14", "סכום");
+  setSheetTextCell(worksheet, "O15", "YYYY-MM-DD");
+  setSheetTextCell(worksheet, "P15", "סכום");
+
+  worksheet["!cols"] = [
+    { wch: 23 },
+    { wch: 21 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 15 },
+    { wch: 16 },
+    { wch: 5 },
+    { wch: 5 },
+    { wch: 5 },
+    { wch: 5 },
+    { wch: 5 },
+    { wch: 5 },
+    { wch: 5 },
+    { wch: 5 },
+    { wch: 16 },
+    { wch: 14 },
+  ];
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, "sheet1");
+  return workbook;
+}
+
+function setSheetTextCell(worksheet, address, value) {
+  XLSX.utils.sheet_add_aoa(worksheet, [[value]], {
+    origin: address,
+  });
+}
+
 function escapeCsvValue(value) {
   const text = String(value ?? "");
   if (/[",\n]/.test(text)) {
@@ -1342,23 +1772,6 @@ function removeFilterChip(filterKey, value) {
     state.filters[filterKey] = state.filters[filterKey].filter((item) => item !== value);
     renderFilterControls();
     return;
-  }
-
-  if (filterKey === "searchText") {
-    state.filters.searchText = "";
-    dom.searchInput.value = "";
-    return;
-  }
-
-  if (filterKey === "minAmount") {
-    state.filters.minAmount = "";
-    dom.minAmount.value = "";
-    return;
-  }
-
-  if (filterKey === "maxAmount") {
-    state.filters.maxAmount = "";
-    dom.maxAmount.value = "";
   }
 }
 
@@ -1379,12 +1792,7 @@ function ensureValueSelected(filterKey, value) {
 }
 
 function hasActiveFilters() {
-  return (
-    Object.keys(FILTER_KEYS).some((filterKey) => state.filters[filterKey].length > 0) ||
-    Boolean(state.filters.searchText) ||
-    state.filters.minAmount !== "" ||
-    state.filters.maxAmount !== ""
-  );
+  return Object.keys(FILTER_KEYS).some((filterKey) => state.filters[filterKey].length > 0);
 }
 
 function countMatchingRecords(key, value) {
@@ -1401,17 +1809,49 @@ function getDefaultFilters() {
     institutions: [],
     products: [],
     tracks: [],
-    searchText: "",
-    minAmount: "",
-    maxAmount: "",
   };
 }
 
 function resetFilters() {
   state.filters = getDefaultFilters();
-  dom.searchInput.value = "";
-  dom.minAmount.value = "";
-  dom.maxAmount.value = "";
+}
+
+function setGroupCount(element, selectedCount, totalCount) {
+  if (!element) {
+    return;
+  }
+
+  if (!totalCount) {
+    element.textContent = "אין נתונים";
+    element.classList.add("is-empty");
+    return;
+  }
+
+  element.textContent = `${numberFormatter.format(selectedCount)}/${numberFormatter.format(totalCount)}`;
+  element.classList.remove("is-empty");
+}
+
+function getSelectedOptionCount(filterKey, options) {
+  if (!Array.isArray(options) || !options.length) {
+    return 0;
+  }
+
+  return state.filters[filterKey].filter((value) => options.includes(value)).length;
+}
+
+function renderFilterSectionSummary(summary) {
+  const quickSelectedCount = summary.products.selectedCount + summary.tracks.selectedCount;
+  const quickTotalCount = summary.products.totalCount + summary.tracks.totalCount;
+  const activeFilterCount = getActiveFilterCount();
+
+  setGroupCount(dom.quickSectionCount, quickSelectedCount, quickTotalCount);
+
+  if (!dom.filtersActiveSummary) {
+    return;
+  }
+
+  dom.filtersActiveSummary.textContent = `${numberFormatter.format(activeFilterCount)} פעילים`;
+  dom.filtersActiveSummary.classList.toggle("is-empty", !activeFilterCount);
 }
 
 function updateMobileUtilityBar(filteredCount) {
@@ -1430,6 +1870,35 @@ function formatCurrency(value) {
   return currencyFormatter.format(Number.isFinite(value) ? value : 0);
 }
 
+function formatSignedCurrency(value) {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  return `${safeValue > 0 ? "+" : safeValue < 0 ? "-" : ""}${formatCurrency(Math.abs(safeValue))}`;
+}
+
+function formatCompactCurrency(value) {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  if (Math.abs(safeValue) >= 1_000_000) {
+    return `₪${new Intl.NumberFormat("he-IL", {
+      maximumFractionDigits: 2,
+    }).format(safeValue / 1_000_000)}מ'`;
+  }
+
+  if (Math.abs(safeValue) >= 1_000) {
+    return `₪${new Intl.NumberFormat("he-IL", {
+      maximumFractionDigits: 0,
+    }).format(safeValue / 1_000)}K`;
+  }
+
+  return formatCurrency(safeValue);
+}
+
+function formatGrowthPercent(value) {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  return `${safeValue > 0 ? "+" : safeValue < 0 ? "-" : ""}${new Intl.NumberFormat("he-IL", {
+    maximumFractionDigits: 2,
+  }).format(Math.abs(safeValue))}%`;
+}
+
 function formatDisplayDate(isoDate) {
   const date = new Date(`${isoDate}T12:00:00`);
   if (Number.isNaN(date.getTime())) {
@@ -1442,8 +1911,24 @@ function formatLocalDateParts(year, month, day) {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function normalizeText(value) {
-  return String(value || "").trim().toLocaleLowerCase("he-IL");
+function formatMonthLabel(isoDate) {
+  const date = new Date(`${isoDate}T12:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return isoDate;
+  }
+
+  return shortMonthFormatter.format(date);
+}
+
+function formatChartAxisDate(isoDate) {
+  const date = new Date(`${isoDate}T12:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return isoDate;
+  }
+
+  return chartDateFormatter.format(date);
 }
 
 function sanitizeFileName(fileName) {
@@ -1511,19 +1996,34 @@ function getActiveFilterCount() {
     count += state.filters[filterKey].length;
   });
 
-  if (state.filters.searchText) {
-    count += 1;
-  }
-
-  if (state.filters.minAmount !== "") {
-    count += 1;
-  }
-
-  if (state.filters.maxAmount !== "") {
-    count += 1;
-  }
-
   return count;
+}
+
+function toggleFilterSection(sectionKey) {
+  if (!Object.hasOwn(state.ui.collapsedSections, sectionKey)) {
+    return;
+  }
+
+  state.ui.collapsedSections[sectionKey] = !state.ui.collapsedSections[sectionKey];
+  syncFilterSectionState();
+}
+
+function syncFilterSectionState() {
+  FILTER_SECTION_KEYS.forEach((sectionKey) => {
+    const collapsed = state.ui.collapsedSections[sectionKey];
+    const section = dom[`${sectionKey}Section`];
+    const toggle = dom[`${sectionKey}SectionToggle`];
+    const panel = dom[`${sectionKey}SectionPanel`];
+
+    if (!section || !toggle || !panel) {
+      return;
+    }
+
+    section.classList.toggle("is-collapsed", collapsed);
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    panel.hidden = collapsed;
+    panel.setAttribute("aria-hidden", String(collapsed));
+  });
 }
 
 function openMobileFilters() {
@@ -1543,6 +2043,15 @@ function closeMobileFilters() {
 
   state.ui.mobileFiltersOpen = false;
   syncMobileFilterUi();
+}
+
+function syncDocumentTitle() {
+  if (!state.meta?.sourceFileName) {
+    document.title = DEFAULT_DOCUMENT_TITLE;
+    return;
+  }
+
+  document.title = `${DEFAULT_DOCUMENT_TITLE} · ${state.meta.sourceFileName}`;
 }
 
 function syncMobileFilterUi() {
