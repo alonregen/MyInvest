@@ -181,7 +181,20 @@ const dom = {
   heroBreakdownTotal: document.getElementById("hero-breakdown-total"),
 };
 
+let lastViewportCompact = null;
+let lastViewportPhone = null;
+
 const handleViewportResize = debounce(() => {
+  const compact = isCompactChartLayout();
+  const phone = isPhoneLayout();
+  const tierChanged =
+    lastViewportCompact !== null &&
+    lastViewportPhone !== null &&
+    (lastViewportCompact !== compact || lastViewportPhone !== phone);
+
+  lastViewportCompact = compact;
+  lastViewportPhone = phone;
+
   if (!isMobileLayout()) {
     closeMobileFilters();
   }
@@ -189,6 +202,10 @@ const handleViewportResize = debounce(() => {
   syncSidebarCollapsedUi();
   resizeCharts();
   syncMobileFilterUi();
+
+  if (tierChanged) {
+    renderDashboard();
+  }
 }, 120);
 
 bootstrap();
@@ -373,6 +390,9 @@ function bootstrap() {
   wireChartSortControls();
   wireHeroToolbar();
 
+  lastViewportCompact = isCompactChartLayout();
+  lastViewportPhone = isPhoneLayout();
+
   const heroBreakdownTable = document.getElementById("hero-breakdown-table");
 
   if (heroBreakdownTable && heroBreakdownTable.dataset.heroTableWired !== "true") {
@@ -384,22 +404,7 @@ function bootstrap() {
         return;
       }
 
-      applyHeroTableRowFilter(row);
-    });
-
-    heroBreakdownTable.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") {
-        return;
-      }
-
-      const row = event.target.closest("tr[data-hero-value]");
-
-      if (!row) {
-        return;
-      }
-
-      event.preventDefault();
-      applyHeroTableRowFilter(row);
+      playHeroTableRowTapFeedback(row);
     });
   }
 }
@@ -1221,9 +1226,22 @@ function renderEmptyCharts() {
     },
   };
 
-  Object.values(state.charts).forEach((chart) => {
+  const heroTitleTop = isCompactChartLayout() ? "54%" : "middle";
+  const heroEmptyOption = {
+    textStyle: emptyOption.textStyle,
+    title: {
+      ...emptyOption.title,
+      top: heroTitleTop,
+    },
+  };
+
+  Object.entries(state.charts).forEach(([key, chart]) => {
+    if (!chart) {
+      return;
+    }
+
     chart.clear();
-    chart.setOption(emptyOption, true);
+    chart.setOption(key === "hero" ? heroEmptyOption : emptyOption, true);
   });
 }
 
@@ -1354,7 +1372,26 @@ function orderTopHoldingsDisplay(topHoldings, mode) {
   return items;
 }
 
+/** Break long y-axis category labels to two lines; prefers a " / " segment boundary */
+function formatHorizontalBarCategoryLabel(value, maxCharsPerLine) {
+  const s = String(value ?? "").trim();
+  if (!s) {
+    return "";
+  }
+  const sep = " / ";
+  const slashIdx = s.indexOf(sep);
+  if (slashIdx > 0 && slashIdx < s.length - sep.length) {
+    return `${s.slice(0, slashIdx)}\n${s.slice(slashIdx + sep.length)}`;
+  }
+  const limit = Math.max(8, maxCharsPerLine || 16);
+  if (s.length <= limit) {
+    return s;
+  }
+  return `${s.slice(0, limit)}\n${s.slice(limit)}`;
+}
+
 function renderGrowthChart(growth) {
+  const compactLayout = isCompactChartLayout();
   const phoneLayout = isPhoneLayout();
   const history = growth?.history || [];
   const mode = state.chartDisplay.growth;
@@ -1374,9 +1411,9 @@ function renderGrowthChart(growth) {
   }
 
   const dateTickCount = seriesData.length;
-  const rotateCategoryLabels = dateTickCount > 6 ? (phoneLayout ? 42 : 30) : 0;
+  const rotateCategoryLabels = dateTickCount > 6 ? (compactLayout ? 42 : 30) : 0;
   const growthGridBottom =
-    (phoneLayout ? 30 : 42) + (rotateCategoryLabels ? (phoneLayout ? 26 : 22) : dateTickCount > 12 ? 14 : 0);
+    (compactLayout ? 30 : 42) + (rotateCategoryLabels ? (compactLayout ? 26 : 22) : dateTickCount > 12 ? 14 : 0);
 
   state.charts.growth.setOption(
     {
@@ -1384,9 +1421,9 @@ function renderGrowthChart(growth) {
       color: ["#198C83"],
       grid: {
         top: 24,
-        right: phoneLayout ? 10 : 18,
+        right: compactLayout ? 10 : 18,
         bottom: growthGridBottom,
-        left: phoneLayout ? 54 : 70,
+        left: compactLayout ? (phoneLayout ? 48 : 54) : 70,
         containLabel: true,
       },
       tooltip: {
@@ -1432,7 +1469,7 @@ function renderGrowthChart(growth) {
         },
         axisLabel: {
           color: "#4A6171",
-          fontSize: phoneLayout ? 10 : 11,
+          fontSize: compactLayout ? 10 : 11,
           rotate: rotateCategoryLabels,
           hideOverlap: true,
           margin: 10,
@@ -1461,7 +1498,7 @@ function renderGrowthChart(growth) {
           type: "line",
           smooth: true,
           symbol: "circle",
-          symbolSize: phoneLayout ? 8 : 10,
+          symbolSize: compactLayout ? 8 : 10,
           lineStyle: {
             width: 4,
             shadowBlur: 14,
@@ -1477,7 +1514,7 @@ function renderGrowthChart(growth) {
             focus: "series",
           },
           label: {
-            show: !phoneLayout && seriesData.length > 0 && highlightIndex >= 0,
+            show: !compactLayout && seriesData.length > 0 && highlightIndex >= 0,
             position: "top",
             color: "#163147",
             fontWeight: 700,
@@ -1504,7 +1541,7 @@ function renderGrowthChart(growth) {
             seriesData.length && chronologicalLast
               ? {
                   symbol: "roundRect",
-                  symbolSize: phoneLayout ? [92, 34] : [118, 38],
+                  symbolSize: compactLayout ? (phoneLayout ? [88, 32] : [92, 34]) : [118, 38],
                   itemStyle: {
                     color: "#163147",
                     borderRadius: 18,
@@ -1549,6 +1586,7 @@ function renderGrowthChart(growth) {
 function renderOwnerChart(ownerBreakdown) {
   const ordered = sortBreakdownItems(ownerBreakdown, state.chartDisplay.owner);
   const hasData = ordered.length > 0;
+  const compactLayout = isCompactChartLayout();
   const phoneLayout = isPhoneLayout();
 
   state.charts.owner.setOption(
@@ -1566,7 +1604,7 @@ function renderOwnerChart(ownerBreakdown) {
         icon: "circle",
         textStyle: {
           color: "#4A6171",
-          fontSize: phoneLayout ? 11 : 12,
+          fontSize: compactLayout ? (phoneLayout ? 10 : 11) : 12,
         },
       },
       graphic: !hasData
@@ -1587,11 +1625,11 @@ function renderOwnerChart(ownerBreakdown) {
       series: [
         {
           type: "pie",
-          radius: phoneLayout ? ["42%", "64%"] : ["48%", "72%"],
-          center: ["50%", phoneLayout ? "40%" : "44%"],
-          avoidLabelOverlap: !phoneLayout,
+          radius: compactLayout ? (phoneLayout ? ["42%", "64%"] : ["44%", "68%"]) : ["48%", "72%"],
+          center: ["50%", compactLayout ? (phoneLayout ? "40%" : "42%") : "44%"],
+          avoidLabelOverlap: !compactLayout,
           label: {
-            show: !phoneLayout,
+            show: !compactLayout,
             formatter: ({ name, percent }) => `${name}\n${percentFormatter.format(percent / 100)}`,
             color: "#163147",
           },
@@ -1614,6 +1652,7 @@ function renderHeroPie(viewModel) {
 
   const ordered = getSortedHeroItems(viewModel);
   const hasData = ordered.length > 0;
+  const compactLayout = isCompactChartLayout();
   const phoneLayout = isPhoneLayout();
   const dimLabel = FILTER_LABELS[state.heroBreakdown] || "";
 
@@ -1623,7 +1662,7 @@ function renderHeroPie(viewModel) {
       color: CHART_COLORS,
       tooltip: {
         trigger: "item",
-        triggerOn: phoneLayout ? "mousemove|click" : "mousemove",
+        triggerOn: compactLayout ? "mousemove|click" : "mousemove",
         confine: true,
         formatter: ({ name, percent }) =>
           `${name}<br>${percentFormatter.format(percent / 100)}`,
@@ -1631,53 +1670,39 @@ function renderHeroPie(viewModel) {
       title: {
         text: dimLabel ? `פיזור לפי ${dimLabel}` : "",
         left: "center",
-        top: phoneLayout ? 4 : 8,
+        top: compactLayout ? (phoneLayout ? 4 : 6) : 8,
         textStyle: {
           color: "#163147",
-          fontSize: phoneLayout ? 14 : 15,
+          fontSize: compactLayout ? (phoneLayout ? 13 : 14) : 15,
           fontWeight: 700,
         },
       },
-      legend: phoneLayout
-        ? {
-            type: "scroll",
-            orient: "vertical",
-            selectedMode: false,
-            right: 6,
-            top: "middle",
-            height: "70%",
-            icon: "circle",
-            itemWidth: 10,
-            itemGap: 8,
-            pageIconSize: 11,
-            pageButtonGap: 6,
-            textStyle: {
-              color: "#4A6171",
-              fontSize: 10,
-            },
-          }
-        : {
-            bottom: 0,
-            type: "scroll",
-            selectedMode: false,
-            icon: "circle",
-            textStyle: {
-              color: "#4A6171",
-              fontSize: 12,
-            },
-          },
+      legend: {
+        bottom: compactLayout ? (phoneLayout ? 2 : 4) : 0,
+        type: "scroll",
+        selectedMode: false,
+        icon: "circle",
+        itemWidth: compactLayout ? 10 : 12,
+        itemGap: compactLayout ? 6 : 10,
+        pageIconSize: compactLayout ? 11 : 12,
+        textStyle: {
+          color: "#4A6171",
+          fontSize: compactLayout ? (phoneLayout ? 10 : 11) : 12,
+        },
+      },
       graphic: [
         ...(hasData
           ? [
               {
                 type: "text",
-                left: phoneLayout ? "4%" : "5%",
-                top: phoneLayout ? "12%" : "14%",
+                left: compactLayout ? "center" : "5%",
+                top: compactLayout ? (phoneLayout ? 30 : 28) : "14%",
                 style: {
                   text: `סה״כ ${formatCurrency(viewModel.totalAmount)}`,
                   fill: "#163147",
-                  fontSize: phoneLayout ? 13 : 14,
+                  fontSize: compactLayout ? (phoneLayout ? 12 : 13) : 14,
                   fontWeight: 700,
+                  textAlign: compactLayout ? "center" : "right",
                 },
               },
             ]
@@ -1699,11 +1724,15 @@ function renderHeroPie(viewModel) {
         {
           type: "pie",
           selectedMode: false,
-          radius: phoneLayout ? ["34%", "54%"] : ["44%", "68%"],
-          center: phoneLayout ? ["42%", "50%"] : ["50%", "48%"],
-          avoidLabelOverlap: !phoneLayout,
+          radius: compactLayout
+            ? phoneLayout
+              ? ["34%", "54%"]
+              : ["36%", "58%"]
+            : ["44%", "68%"],
+          center: compactLayout ? ["50%", phoneLayout ? "42%" : "44%"] : ["50%", "48%"],
+          avoidLabelOverlap: !compactLayout,
           label: {
-            show: !phoneLayout,
+            show: !compactLayout,
             formatter: ({ name, percent }) => `${name}\n${percentFormatter.format(percent / 100)}`,
             color: "#163147",
           },
@@ -1743,9 +1772,6 @@ function renderHeroSummaryTable(viewModel) {
 
   ordered.forEach((item) => {
     const tr = document.createElement("tr");
-    tr.tabIndex = 0;
-    tr.setAttribute("role", "button");
-    tr.dataset.heroFilterKey = state.heroBreakdown;
     tr.dataset.heroValue = item.name;
     const share = total > 0 ? item.value / total : 0;
 
@@ -1768,9 +1794,12 @@ function renderHeroSummaryTable(viewModel) {
 function renderInstitutionChart(institutionBreakdown, filteredTotal) {
   const ordered = sortBreakdownItems(institutionBreakdown, state.chartDisplay.institution);
   const labels = ordered.map((item) => item.name);
+  const compactLayout = isCompactChartLayout();
   const phoneLayout = isPhoneLayout();
   const maxValue = ordered.reduce((max, item) => Math.max(max, sanitizeAmount(item.value)), 0);
-  const gridRight = computeBarChartGridRight(maxValue, phoneLayout);
+  const showBarValueLabels = !compactLayout;
+  const gridRight = computeBarChartGridRight(maxValue, compactLayout, showBarValueLabels);
+  const labelBreakChars = phoneLayout ? 14 : compactLayout ? 18 : 34;
 
   state.charts.institution.setOption(
     {
@@ -1779,8 +1808,8 @@ function renderInstitutionChart(institutionBreakdown, filteredTotal) {
       grid: {
         top: 10,
         right: gridRight,
-        bottom: phoneLayout ? 18 : 22,
-        left: phoneLayout ? 84 : 118,
+        bottom: compactLayout ? (phoneLayout ? 16 : 18) : 22,
+        left: compactLayout ? (phoneLayout ? 4 : 8) : 24,
         containLabel: true,
       },
       tooltip: {
@@ -1802,7 +1831,7 @@ function renderInstitutionChart(institutionBreakdown, filteredTotal) {
         splitNumber: 5,
         axisLabel: {
           color: "#4A6171",
-          fontSize: phoneLayout ? 10 : 11,
+          fontSize: compactLayout ? 10 : 11,
           formatter: (value) => formatCompactCurrency(value),
           hideOverlap: true,
           margin: 10,
@@ -1817,15 +1846,18 @@ function renderInstitutionChart(institutionBreakdown, filteredTotal) {
         inverse: true,
         axisLabel: {
           color: "#163147",
-          width: phoneLayout ? 72 : 128,
-          overflow: "truncate",
-          hideOverlap: true,
+          fontSize: compactLayout ? 10 : 11,
+          lineHeight: 15,
+          formatter: (value) => formatHorizontalBarCategoryLabel(value, labelBreakChars),
+          overflow: "break",
+          width: phoneLayout ? 88 : compactLayout ? 108 : 148,
+          interval: 0,
         },
       },
       series: [
         {
           type: "bar",
-          barWidth: phoneLayout ? 16 : 20,
+          barWidth: compactLayout ? (phoneLayout ? 15 : 17) : 20,
           data: ordered.map((item) => ({
             value: sanitizeAmount(item.value),
             name: item.name,
@@ -1835,7 +1867,7 @@ function renderInstitutionChart(institutionBreakdown, filteredTotal) {
             },
           })),
           label: {
-            show: true,
+            show: showBarValueLabels,
             position: "right",
             color: "#163147",
             formatter: ({ value, dataIndex }) => (dataIndex < 3 ? formatCurrency(value) : ""),
@@ -1863,14 +1895,17 @@ function renderInstitutionChart(institutionBreakdown, filteredTotal) {
 }
 
 function renderTopHoldingsChart(topHoldings, filteredTotal) {
+  const compactLayout = isCompactChartLayout();
   const phoneLayout = isPhoneLayout();
   const ordered = orderTopHoldingsDisplay(topHoldings, state.chartDisplay.topHoldings);
   const chartItems = ordered.map((item) => ({
-    axisLabel: truncateText(item.axisLabel, phoneLayout ? 16 : 28),
+    axisLabel: item.axisLabel,
     record: item.record,
   }));
   const maxAmount = chartItems.reduce((max, item) => Math.max(max, sanitizeAmount(item.record.amount)), 0);
-  const gridRight = computeBarChartGridRight(maxAmount, phoneLayout);
+  const showBarValueLabels = !compactLayout;
+  const gridRight = computeBarChartGridRight(maxAmount, compactLayout, showBarValueLabels);
+  const labelBreakChars = phoneLayout ? 14 : compactLayout ? 18 : 30;
 
   state.charts.topHoldings.setOption(
     {
@@ -1879,8 +1914,8 @@ function renderTopHoldingsChart(topHoldings, filteredTotal) {
       grid: {
         top: 10,
         right: gridRight,
-        bottom: phoneLayout ? 18 : 22,
-        left: phoneLayout ? 118 : 168,
+        bottom: compactLayout ? (phoneLayout ? 16 : 18) : 22,
+        left: compactLayout ? (phoneLayout ? 4 : 8) : 28,
         containLabel: true,
       },
       tooltip: {
@@ -1903,7 +1938,7 @@ function renderTopHoldingsChart(topHoldings, filteredTotal) {
         splitNumber: 5,
         axisLabel: {
           color: "#4A6171",
-          fontSize: phoneLayout ? 10 : 11,
+          fontSize: compactLayout ? 10 : 11,
           formatter: (value) => formatCompactCurrency(value),
           hideOverlap: true,
           margin: 10,
@@ -1918,15 +1953,18 @@ function renderTopHoldingsChart(topHoldings, filteredTotal) {
         inverse: true,
         axisLabel: {
           color: "#163147",
-          width: phoneLayout ? 110 : 158,
-          overflow: "truncate",
-          hideOverlap: true,
+          fontSize: compactLayout ? 10 : 11,
+          lineHeight: 15,
+          formatter: (value) => formatHorizontalBarCategoryLabel(value, labelBreakChars),
+          overflow: "break",
+          width: phoneLayout ? 92 : compactLayout ? 112 : 162,
+          interval: 0,
         },
       },
       series: [
         {
           type: "bar",
-          barWidth: phoneLayout ? 14 : 18,
+          barWidth: compactLayout ? (phoneLayout ? 13 : 15) : 18,
           data: chartItems.map((item) => ({
             value: sanitizeAmount(item.record.amount),
             name: item.axisLabel,
@@ -1936,7 +1974,7 @@ function renderTopHoldingsChart(topHoldings, filteredTotal) {
             },
           })),
           label: {
-            show: true,
+            show: showBarValueLabels,
             position: "right",
             color: "#163147",
             formatter: ({ value, dataIndex }) => (dataIndex < 3 ? formatCurrency(value) : ""),
@@ -2046,21 +2084,22 @@ function renderHeroSummaryEmpty() {
   dom.heroBreakdownTableBody.appendChild(tr);
 }
 
-function applyHeroTableRowFilter(row) {
+function playHeroTableRowTapFeedback(row) {
   if (!row?.dataset?.heroValue) {
     return;
   }
 
-  const filterKey = row.dataset.heroFilterKey;
-  const value = row.dataset.heroValue;
+  row.classList.remove("hero-row-tap");
+  // Re-trigger animation if the row is tapped repeatedly.
+  void row.offsetWidth;
+  row.classList.add("hero-row-tap");
 
-  if (!filterKey || value === undefined || !Object.hasOwn(FILTER_KEYS, filterKey)) {
-    return;
-  }
+  const done = () => {
+    row.classList.remove("hero-row-tap");
+  };
 
-  toggleArrayFilter(filterKey, value);
-  renderFilterControls();
-  renderDashboard();
+  row.addEventListener("animationend", done, { once: true });
+  window.setTimeout(done, 500);
 }
 
 function applyTableRowAsFilters(row) {
@@ -2546,11 +2585,19 @@ function sanitizeAmount(value) {
   return Math.min(n, Number.MAX_SAFE_INTEGER);
 }
 
-function computeBarChartGridRight(maxAmount, phoneLayout) {
+function computeBarChartGridRight(maxAmount, compactLayout, showValueLabels) {
+  if (!showValueLabels) {
+    return compactLayout ? 36 : 52;
+  }
+
   const label = formatCurrency(sanitizeAmount(maxAmount));
-  const unit = phoneLayout ? 7 : 8;
+  const unit = compactLayout ? 7 : 8;
   const padded = Math.ceil(label.length * unit + 24);
-  return Math.min(144, Math.max(phoneLayout ? 52 : 68, padded));
+  return Math.min(144, Math.max(compactLayout ? 48 : 68, padded));
+}
+
+function isCompactChartLayout() {
+  return isMobileLayout();
 }
 
 function isBlank(value) {
