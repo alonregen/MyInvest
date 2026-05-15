@@ -2,7 +2,16 @@
   "name": "myinvest-demo-workbook",
   "private": true,
   "type": "module",
+  "scripts": {
+    "build": "node create_demo_workbook.mjs",
+    "test": "node test-demo-roundtrip.mjs",
+    "test:browser": "node test-browser-roundtrip.mjs"
+  },
   "dependencies": {
     "exceljs": "^4.4.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0",
+    "xlsx": "^0.18.5"
   }
 }

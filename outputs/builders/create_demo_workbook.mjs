@@ -6,6 +6,7 @@ import ExcelJS from "exceljs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outputDir = path.resolve(__dirname, "..", "demo-xlsx-20260509");
 const outputPath = path.join(outputDir, "savings-dashboard-demo.xlsx");
+const assetsPath = path.resolve(__dirname, "..", "..", "assets", "savings-dashboard-demo.xlsx");
 
 const holdings = [
   ["פנסיה", "מניות", 182000, "הראל", "אלון", 6500],
@@ -31,6 +32,11 @@ const history = [
   ["2026-05-09", 1089500],
 ];
 
+const currentTotal = holdings.reduce((sum, row) => sum + row[2], 0);
+const previousTotal = history.at(-2)?.[1] ?? 0;
+const netChange = currentTotal - previousTotal;
+const percentChange = previousTotal ? currentTotal / previousTotal - 1 : 0;
+
 const fill = (hex) => ({
   type: "pattern",
   pattern: "solid",
@@ -48,8 +54,9 @@ buildGuideSheet(guide);
 
 const buffer = await workbook.xlsx.writeBuffer();
 await fs.writeFile(outputPath, buffer);
+await fs.copyFile(outputPath, assetsPath);
 
-console.log(JSON.stringify({ outputPath }, null, 2));
+console.log(JSON.stringify({ outputPath, assetsPath }, null, 2));
 
 function buildImportSheet(ws) {
   ws.mergeCells("A1:F1");
@@ -128,10 +135,11 @@ function buildImportSheet(ws) {
 
   ws.getCell("P4").value = new Date("2026-05-09T12:00:00");
   ws.getCell("P4").numFmt = "yyyy-mm-dd";
-  ws.getCell("P5").value = { formula: "SUM(C5:C16)" };
-  ws.getCell("P7").value = { formula: "P19" };
-  ws.getCell("P8").value = { formula: "IFERROR(P5/P7-1,0)" };
-  ws.getCell("P9").value = { formula: "P5-P7" };
+  // Cached `result` values let SheetJS read totals on upload (formulas alone are not enough).
+  ws.getCell("P5").value = { formula: "SUM(C5:C16)", result: currentTotal };
+  ws.getCell("P7").value = { formula: "P19", result: previousTotal };
+  ws.getCell("P8").value = { formula: "IFERROR(P5/P7-1,0)", result: percentChange };
+  ws.getCell("P9").value = { formula: "P5-P7", result: netChange };
   ws.getCell("P5").numFmt = '₪#,##0';
   ws.getCell("P7").numFmt = '₪#,##0';
   ws.getCell("P8").numFmt = "0.0%";
@@ -197,10 +205,10 @@ function buildGuideSheet(ws) {
     c.font = { bold: true, color: { argb: "FFFFFFFF" } };
     c.fill = fill("198C83");
   }
-  ws.getCell("B5").value = { formula: "sheet1!P5" };
-  ws.getCell("B6").value = { formula: "sheet1!P7" };
-  ws.getCell("B7").value = { formula: "sheet1!P9" };
-  ws.getCell("B8").value = { formula: "sheet1!P8" };
+  ws.getCell("B5").value = { formula: "sheet1!P5", result: currentTotal };
+  ws.getCell("B6").value = { formula: "sheet1!P7", result: previousTotal };
+  ws.getCell("B7").value = { formula: "sheet1!P9", result: netChange };
+  ws.getCell("B8").value = { formula: "sheet1!P8", result: percentChange };
   ws.getCell("B5").numFmt = '₪#,##0';
   ws.getCell("B6").numFmt = '₪#,##0';
   ws.getCell("B7").numFmt = '₪#,##0';

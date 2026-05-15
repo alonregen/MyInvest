@@ -242,7 +242,7 @@ function bootstrap() {
     dom.fileInput.value = "";
   });
   dom.downloadTemplate.addEventListener("click", () => {
-    downloadTemplateWorkbook();
+    void downloadTemplateWorkbook();
   });
 
   ["dragenter", "dragover"].forEach((eventName) => {
@@ -2248,77 +2248,41 @@ function exportFilteredCsv() {
   URL.revokeObjectURL(url);
 }
 
-function downloadTemplateWorkbook() {
+const TEMPLATE_WORKBOOK_PATH = "assets/savings-dashboard-demo.xlsx";
+const TEMPLATE_WORKBOOK_NAME = "savings-dashboard-demo.xlsx";
+
+async function downloadTemplateWorkbook() {
   try {
-    if (!window.XLSX) {
-      throw new Error("ספריית Excel המקומית לא זמינה כרגע. רעננו את הדף ונסו שוב.");
+    const templateUrl = new URL(TEMPLATE_WORKBOOK_PATH, document.baseURI).href;
+    const response = await fetch(templateUrl);
+
+    if (!response.ok) {
+      throw new Error(`לא נמצא קובץ התבנית (${response.status}).`);
     }
 
-    const workbook = buildTemplateWorkbook();
-    XLSX.writeFile(workbook, "savings-dashboard-template.xlsx", {
-      compression: true,
-    });
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = TEMPLATE_WORKBOOK_NAME;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
 
     clearBanner(dom.errorBanner);
     setBanner(
       dom.successBanner,
-      "תבנית XLSX ירדה בהצלחה. אפשר למלא, לשמור ולהעלות אותה חזרה לדשבורד.",
+      "קובץ הדוגמה ירד בהצלחה. אפשר לערוך, לשמור ולהעלות אותו חזרה לדשבורד.",
       "success"
     );
   } catch (error) {
-    setBanner(dom.errorBanner, error.message || "לא ניתן היה ליצור את תבנית ה־XLSX.", "error");
+    const message =
+      window.location.protocol === "file:"
+        ? "הורדת התבנית דורשת שרת מקומי (למשל npx serve) או פתיחה דרך GitHub Pages."
+        : error.message || "לא ניתן היה להוריד את קובץ ה־XLSX.";
+    setBanner(dom.errorBanner, message, "error");
   }
-}
-
-function buildTemplateWorkbook() {
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.aoa_to_sheet([["תיק השקעות"]]);
-
-  setSheetTextCell(worksheet, "A4", "מוצר");
-  setSheetTextCell(worksheet, "B4", "מסלול");
-  setSheetTextCell(worksheet, "C4", "סכום");
-  setSheetTextCell(worksheet, "D4", "איפה");
-  setSheetTextCell(worksheet, "E4", "אצל מי");
-  setSheetTextCell(worksheet, "F4", "הפקדות בתקופה");
-
-  setSheetTextCell(worksheet, "O4", "תאריך עדכון");
-  setSheetTextCell(worksheet, "O5", 'סה"כ');
-  setSheetTextCell(worksheet, "O7", "סכום קודם");
-  setSheetTextCell(worksheet, "O8", "אחוז עליה");
-  setSheetTextCell(worksheet, "O9", "נטו עליה");
-  setSheetTextCell(worksheet, "O13", "חודשים קודמים");
-  setSheetTextCell(worksheet, "O14", "YYYY-MM-DD");
-  setSheetTextCell(worksheet, "P14", "סכום");
-  setSheetTextCell(worksheet, "O15", "YYYY-MM-DD");
-  setSheetTextCell(worksheet, "P15", "סכום");
-
-  worksheet["!cols"] = [
-    { wch: 23 },
-    { wch: 21 },
-    { wch: 14 },
-    { wch: 18 },
-    { wch: 15 },
-    { wch: 16 },
-    { wch: 5 },
-    { wch: 5 },
-    { wch: 5 },
-    { wch: 5 },
-    { wch: 5 },
-    { wch: 5 },
-    { wch: 5 },
-    { wch: 5 },
-    { wch: 16 },
-    { wch: 14 },
-  ];
-
-  XLSX.utils.book_append_sheet(workbook, worksheet, "sheet1");
-  return workbook;
-}
-
-function setSheetTextCell(worksheet, address, value) {
-  XLSX.utils.sheet_add_aoa(worksheet, [[value]], {
-    origin: address,
-  });
 }
 
 function escapeCsvValue(value) {
