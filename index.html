@@ -13,7 +13,7 @@
     <link rel="alternate icon" href="assets/favicon.svg" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.svg" />
     <link rel="mask-icon" href="assets/favicon.svg" color="#17324d" />
-    <link rel="stylesheet" href="assets/styles.css" />
+    <link rel="stylesheet" href="assets/tailwind.css" />
   </head>
   <body>
     <div class="page-backdrop">
@@ -458,6 +458,18 @@
                   <p>קצב צמיחה</p>
                   <strong id="growth-percent-change">0%</strong>
                   <span id="growth-percent-change-label">שינוי מצטבר בין התקופות</span>
+                </article>
+
+                <article class="growth-metric" id="growth-total-deposits-card" hidden>
+                  <p>כולל הפקדות</p>
+                  <strong id="growth-total-deposits">₪0</strong>
+                  <span id="growth-total-deposits-label">סך ההפקדות בתקופה</span>
+                </article>
+
+                <article class="growth-metric" id="growth-deposit-percent-card" hidden>
+                  <p>אחוז עליה הפקדות</p>
+                  <strong id="growth-deposit-percent">0%</strong>
+                  <span id="growth-deposit-percent-label">משקל ההפקדות מהבסיס</span>
                 </article>
               </div>
 

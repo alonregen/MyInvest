@@ -1,0 +1,44 @@
+/*
+ * Tailwind entry point.
+ * The existing bespoke stylesheet is folded into the `components` layer so that
+ * Tailwind utilities (emitted later, in the utilities layer) always win, letting
+ * us layer UX polish on top without touching the base design.
+ */
+@import "../assets/styles.css" layer(components);
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * UX polish layered on top of the base design (unlayered, so it wins over the
+ * folded component styles). Scoped with min-width to avoid touching the mobile
+ * single-column stacks.
+ */
+
+/* Growth metrics flow cleanly whether the file has 3 or 5 cards (deposits optional). */
+@media (min-width: 921px) {
+  .growth-metrics {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+}
+
+/* Tabular figures keep money columns aligned. */
+.kpi-card strong,
+.growth-metric strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle, GPU-cheap hover feedback on the metric cards. */
+.kpi-card,
+.growth-metric {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .kpi-card:hover,
+  .growth-metric:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 32px rgba(16, 37, 55, 0.08);
+  }
+}

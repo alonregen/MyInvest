@@ -36,6 +36,18 @@ jobs:
       - name: Remove stray symlinks under outputs
         run: rm -rf outputs/node_modules 2>/dev/null || true
 
+      # Rebuild the Tailwind stylesheet so the deployed CSS always matches source.
+      # assets/tailwind.css is also committed, so this is a safety net, not a hard requirement.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build Tailwind CSS
+        run: |
+          npm ci
+          npm run build:css
+
       # No configure-pages step — it uses Node 20 and often fails with exit 1; not required for static upload + deploy.
 
       - name: Upload artifact

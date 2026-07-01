@@ -36,6 +36,8 @@ const currentTotal = holdings.reduce((sum, row) => sum + row[2], 0);
 const previousTotal = history.at(-2)?.[1] ?? 0;
 const netChange = currentTotal - previousTotal;
 const percentChange = previousTotal ? currentTotal / previousTotal - 1 : 0;
+const totalDeposits = holdings.reduce((sum, row) => sum + (row[5] ?? 0), 0);
+const depositPercent = previousTotal ? totalDeposits / previousTotal : 0;
 
 const fill = (hex) => ({
   type: "pattern",
@@ -122,7 +124,16 @@ function buildImportSheet(ws) {
     cell.alignment = { wrapText: true };
   });
 
-  const oLabels = ["תאריך עדכון", 'סה"כ', null, "סכום קודם", "אחוז עליה", "נטו עליה"];
+  const oLabels = [
+    "תאריך עדכון",
+    'סה"כ',
+    null,
+    "סכום קודם",
+    "אחוז עליה נטו",
+    "נטו עליה",
+    "כולל הפקדות",
+    "אחוז עליה הפקדות",
+  ];
   oLabels.forEach((text, i) => {
     const row = ws.getRow(4 + i);
     const c = row.getCell(15);
@@ -140,10 +151,14 @@ function buildImportSheet(ws) {
   ws.getCell("P7").value = { formula: "P19", result: previousTotal };
   ws.getCell("P8").value = { formula: "IFERROR(P5/P7-1,0)", result: percentChange };
   ws.getCell("P9").value = { formula: "P5-P7", result: netChange };
+  ws.getCell("P10").value = { formula: "SUM(F5:F16)", result: totalDeposits };
+  ws.getCell("P11").value = { formula: "IFERROR(P10/P7,0)", result: depositPercent };
   ws.getCell("P5").numFmt = '₪#,##0';
   ws.getCell("P7").numFmt = '₪#,##0';
   ws.getCell("P8").numFmt = "0.0%";
   ws.getCell("P9").numFmt = '₪#,##0';
+  ws.getCell("P10").numFmt = '₪#,##0';
+  ws.getCell("P11").numFmt = "0.0%";
 
   ws.getCell("O13").value = "חודשים קודמים";
   ws.getCell("P13").value = null;

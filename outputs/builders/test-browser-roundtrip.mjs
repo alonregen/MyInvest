@@ -38,6 +38,23 @@ if (errorBanner?.trim()) {
   throw new Error(`dashboard error banner: ${errorBanner}`);
 }
 
+const depositCardVisible = await page.locator("#growth-total-deposits-card").isVisible();
+if (!depositCardVisible) {
+  throw new Error("total deposits card should be visible for the demo file");
+}
+const depositPercentVisible = await page.locator("#growth-deposit-percent-card").isVisible();
+if (!depositPercentVisible) {
+  throw new Error("deposit percent card should be visible for the demo file");
+}
+const totalDepositsText = (await page.locator("#growth-total-deposits").textContent())?.trim() ?? "";
+const depositPercentText = (await page.locator("#growth-deposit-percent").textContent())?.trim() ?? "";
+if (!/[1-9]/.test(totalDepositsText)) {
+  throw new Error(`total deposits not populated: "${totalDepositsText}"`);
+}
+if (!/[1-9].*%/.test(depositPercentText)) {
+  throw new Error(`deposit percent not populated: "${depositPercentText}"`);
+}
+
 console.log(
   JSON.stringify(
     {
@@ -46,6 +63,8 @@ console.log(
       kpiTotal: await page.locator("#kpi-total").textContent(),
       kpiHoldings: await page.locator("#kpi-holdings").textContent(),
       fileNameLabel: await page.locator("#file-name").textContent(),
+      totalDeposits: totalDepositsText,
+      depositPercent: depositPercentText,
     },
     null,
     2

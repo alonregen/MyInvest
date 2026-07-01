@@ -95,7 +95,18 @@ function parseDemoWorkbook(fileBuffer) {
 
   assert.ok(history.length >= 6, `expected history points, got ${history.length}`);
 
-  return { records, declaredTotal, computedTotal, history };
+  const totalDeposits = toNumber(readSheetValue(worksheet, "P10"));
+  const depositPercent = toNumber(readSheetValue(worksheet, "P11"));
+  assert.ok(
+    Number.isFinite(totalDeposits) && totalDeposits > 0,
+    `expected total deposits in P10, got ${totalDeposits}`
+  );
+  assert.ok(
+    Number.isFinite(depositPercent) && depositPercent > 0,
+    `expected deposit percent in P11, got ${depositPercent}`
+  );
+
+  return { records, declaredTotal, computedTotal, history, totalDeposits, depositPercent };
 }
 
 const fileBuffer = fs.readFileSync(demoPath);
@@ -108,6 +119,8 @@ console.log(
       records: parsed.records.length,
       declaredTotal: parsed.declaredTotal,
       historyPoints: parsed.history.length,
+      totalDeposits: parsed.totalDeposits,
+      depositPercent: parsed.depositPercent,
     },
     null,
     2

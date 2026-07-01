@@ -156,6 +156,10 @@ const dom = {
   growthNetChangeLabel: document.getElementById("growth-net-change-label"),
   growthPercentChange: document.getElementById("growth-percent-change"),
   growthPercentChangeLabel: document.getElementById("growth-percent-change-label"),
+  growthTotalDepositsCard: document.getElementById("growth-total-deposits-card"),
+  growthTotalDeposits: document.getElementById("growth-total-deposits"),
+  growthDepositPercentCard: document.getElementById("growth-deposit-percent-card"),
+  growthDepositPercent: document.getElementById("growth-deposit-percent"),
   ownerChart: document.getElementById("owner-chart"),
   institutionChart: document.getElementById("institution-chart"),
   topHoldingsChart: document.getElementById("top-holdings-chart"),
@@ -675,6 +679,8 @@ function parseGrowthMeta(worksheet, updateDate, declaredTotal) {
   const previousTotalCell = toNumber(readSheetValue(worksheet, "P7"));
   const percentChangeCell = toNumber(readSheetValue(worksheet, "P8"));
   const netChangeCell = toNumber(readSheetValue(worksheet, "P9"));
+  const totalDepositsCell = toNumber(readSheetValue(worksheet, "P10"));
+  const depositPercentCell = toNumber(readSheetValue(worksheet, "P11"));
   const history = [];
   let emptyStreak = 0;
 
@@ -744,9 +750,15 @@ function parseGrowthMeta(worksheet, updateDate, declaredTotal) {
       ? currentTotal - previousTotal
       : NaN;
   const percentChange = Number.isFinite(percentChangeCell)
-    ? percentChangeCell
+    ? normalizePercentValue(percentChangeCell)
     : Number.isFinite(previousTotal) && previousTotal !== 0 && Number.isFinite(currentTotal)
       ? ((currentTotal - previousTotal) / previousTotal) * 100
+      : NaN;
+  const totalDeposits = Number.isFinite(totalDepositsCell) ? totalDepositsCell : NaN;
+  const depositPercent = Number.isFinite(depositPercentCell)
+    ? normalizePercentValue(depositPercentCell)
+    : Number.isFinite(totalDeposits) && Number.isFinite(previousTotal) && previousTotal !== 0
+      ? (totalDeposits / previousTotal) * 100
       : NaN;
 
   return {
@@ -756,7 +768,24 @@ function parseGrowthMeta(worksheet, updateDate, declaredTotal) {
     previousTotal,
     netChange,
     percentChange,
+    totalDeposits,
+    depositPercent,
   };
+}
+
+/**
+ * Excel stores percentages as ratios (0.617% -> 0.00617). Whole-number percents
+ * (already multiplied) come through as-is. Values with |v| < 1 are treated as
+ * ratios and scaled to whole-number percent so downstream formatting is correct.
+ */
+function normalizePercentValue(value) {
+  if (!Number.isFinite(value)) {
+    return NaN;
+  }
+  if (value !== 0 && Math.abs(value) < 1) {
+    return value * 100;
+  }
+  return value;
 }
 
 function validateHeaders(worksheet) {
@@ -1286,6 +1315,7 @@ function renderGrowthStory(growth) {
     dom.growthNetChangeLabel.textContent = "לעומת הנתון הקודם";
     dom.growthPercentChange.textContent = "0%";
     dom.growthPercentChangeLabel.textContent = "שינוי מצטבר בין התקופות";
+    renderDepositMetrics(null);
     return;
   }
 
@@ -1306,6 +1336,23 @@ function renderGrowthStory(growth) {
   dom.growthPercentChangeLabel.textContent = Number.isFinite(growth.previousTotal)
     ? `מול בסיס של ${formatCurrency(growth.previousTotal)}`
     : "שינוי מצטבר בין התקופות";
+  renderDepositMetrics(growth);
+}
+
+/** Deposit cards are optional: shown only when the file supplies P10/P11. */
+function renderDepositMetrics(growth) {
+  const hasDeposits = Boolean(growth) && Number.isFinite(growth.totalDeposits);
+  const hasDepositPercent = Boolean(growth) && Number.isFinite(growth.depositPercent);
+
+  dom.growthTotalDepositsCard.hidden = !hasDeposits;
+  if (hasDeposits) {
+    dom.growthTotalDeposits.textContent = formatSignedCurrency(growth.totalDeposits);
+  }
+
+  dom.growthDepositPercentCard.hidden = !hasDepositPercent;
+  if (hasDepositPercent) {
+    dom.growthDepositPercent.textContent = formatGrowthPercent(growth.depositPercent);
+  }
 }
 
 function sortBreakdownItems(items, mode) {

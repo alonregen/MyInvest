@@ -1,0 +1,13 @@
+{
+  "name": "myinvest-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "מרכז החסכונות - static savings dashboard",
+  "scripts": {
+    "build:css": "tailwindcss -i src/tailwind.css -o assets/tailwind.css --minify",
+    "watch:css": "tailwindcss -i src/tailwind.css -o assets/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}
