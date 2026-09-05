@@ -152,14 +152,12 @@ const dom = {
   growthPeriodLabel: document.getElementById("growth-period-label"),
   growthCurrentTotal: document.getElementById("growth-current-total"),
   growthCurrentDate: document.getElementById("growth-current-date"),
-  growthNetChange: document.getElementById("growth-net-change"),
-  growthNetChangeLabel: document.getElementById("growth-net-change-label"),
-  growthPercentChange: document.getElementById("growth-percent-change"),
-  growthPercentChangeLabel: document.getElementById("growth-percent-change-label"),
-  growthTotalDepositsCard: document.getElementById("growth-total-deposits-card"),
   growthTotalDeposits: document.getElementById("growth-total-deposits"),
-  growthDepositPercentCard: document.getElementById("growth-deposit-percent-card"),
-  growthDepositPercent: document.getElementById("growth-deposit-percent"),
+  growthTotalDepositsLabel: document.getElementById("growth-total-deposits-label"),
+  growthMarketTitle: document.getElementById("growth-market-title"),
+  growthMarketReturn: document.getElementById("growth-market-return"),
+  growthMarketReturnLabel: document.getElementById("growth-market-return-label"),
+  growthSplitSummary: document.getElementById("growth-split-summary"),
   ownerChart: document.getElementById("owner-chart"),
   institutionChart: document.getElementById("institution-chart"),
   topHoldingsChart: document.getElementById("top-holdings-chart"),
@@ -760,6 +758,16 @@ function parseGrowthMeta(worksheet, updateDate, declaredTotal) {
     : Number.isFinite(totalDeposits) && Number.isFinite(previousTotal) && previousTotal !== 0
       ? (totalDeposits / previousTotal) * 100
       : NaN;
+  const hasDepositSplit = Number.isFinite(totalDeposits);
+  const marketReturn = hasDepositSplit && Number.isFinite(netChange)
+    ? netChange - totalDeposits
+    : Number.isFinite(netChange)
+      ? netChange
+      : NaN;
+  const marketReturnPercent =
+    Number.isFinite(marketReturn) && Number.isFinite(previousTotal) && previousTotal !== 0
+      ? (marketReturn / previousTotal) * 100
+      : NaN;
 
   return {
     history: distinctHistory,
@@ -770,6 +778,9 @@ function parseGrowthMeta(worksheet, updateDate, declaredTotal) {
     percentChange,
     totalDeposits,
     depositPercent,
+    hasDepositSplit,
+    marketReturn,
+    marketReturnPercent,
   };
 }
 
@@ -1308,51 +1319,85 @@ function ensureCharts() {
 
 function renderGrowthStory(growth) {
   if (!growth || !growth.history.length) {
-    dom.growthPeriodLabel.textContent = "מעלים קובץ כדי לראות את קו הצמיחה לאורך הזמן.";
+    dom.growthPeriodLabel.textContent = "מעלים קובץ כדי להפריד בין כסף שהופקד לתשואה מהשוק.";
     dom.growthCurrentTotal.textContent = formatCurrency(0);
     dom.growthCurrentDate.textContent = "ממתין לטעינה";
-    dom.growthNetChange.textContent = formatCurrency(0);
-    dom.growthNetChangeLabel.textContent = "לעומת הנתון הקודם";
-    dom.growthPercentChange.textContent = "0%";
-    dom.growthPercentChangeLabel.textContent = "שינוי מצטבר בין התקופות";
-    renderDepositMetrics(null);
+    renderGrowthSplit(null);
     return;
   }
 
   const firstPoint = growth.history[0];
   const lastPoint = growth.history[growth.history.length - 1];
-  const comparisonDate = Number.isFinite(growth.previousTotal) && growth.history.length > 1
-    ? growth.history[growth.history.length - 2]?.date
-    : null;
 
-  dom.growthPeriodLabel.textContent = `מהלך צמיחה מ-${formatMonthLabel(firstPoint.date)} עד ${formatMonthLabel(lastPoint.date)}.`;
+  dom.growthPeriodLabel.textContent = `מ-${formatMonthLabel(firstPoint.date)} עד ${formatMonthLabel(lastPoint.date)}.`;
   dom.growthCurrentTotal.textContent = formatCurrency(growth.currentTotal);
   dom.growthCurrentDate.textContent = growth.currentDate ? `נכון ל־${formatDisplayDate(growth.currentDate)}` : "מעדכון אחרון";
-  dom.growthNetChange.textContent = formatSignedCurrency(growth.netChange);
-  dom.growthNetChangeLabel.textContent = comparisonDate
-    ? `לעומת ${formatMonthLabel(comparisonDate)}`
-    : "לעומת הנתון הקודם";
-  dom.growthPercentChange.textContent = formatGrowthPercent(growth.percentChange);
-  dom.growthPercentChangeLabel.textContent = Number.isFinite(growth.previousTotal)
-    ? `מול בסיס של ${formatCurrency(growth.previousTotal)}`
-    : "שינוי מצטבר בין התקופות";
-  renderDepositMetrics(growth);
+  renderGrowthSplit(growth);
 }
 
-/** Deposit cards are optional: shown only when the file supplies P10/P11. */
-function renderDepositMetrics(growth) {
-  const hasDeposits = Boolean(growth) && Number.isFinite(growth.totalDeposits);
-  const hasDepositPercent = Boolean(growth) && Number.isFinite(growth.depositPercent);
+function renderGrowthSplit(growth) {
+  const hasDeposits = Boolean(growth) && growth.hasDepositSplit;
+  const comparisonDate = Number.isFinite(growth?.previousTotal) && growth.history.length > 1
+    ? growth.history[growth.history.length - 2]?.date
+    : null;
+  const periodHint = comparisonDate ? `מאז ${formatMonthLabel(comparisonDate)}` : "בתקופה האחרונה";
 
-  dom.growthTotalDepositsCard.hidden = !hasDeposits;
   if (hasDeposits) {
     dom.growthTotalDeposits.textContent = formatSignedCurrency(growth.totalDeposits);
+    applySignedClass(dom.growthTotalDeposits, growth.totalDeposits);
+    dom.growthTotalDepositsLabel.textContent = `${periodHint} · כסף שנכנס, לא רווח`;
+  } else {
+    dom.growthTotalDeposits.textContent = "לא צוין";
+    applySignedClass(dom.growthTotalDeposits, 0);
+    dom.growthTotalDepositsLabel.textContent = "אין עמודת הפקדות בקובץ";
   }
 
-  dom.growthDepositPercentCard.hidden = !hasDepositPercent;
-  if (hasDepositPercent) {
-    dom.growthDepositPercent.textContent = formatGrowthPercent(growth.depositPercent);
+  if (growth && Number.isFinite(growth.marketReturn)) {
+    const title = hasDeposits ? "תשואה מהשוק" : "שינוי בשווי";
+    const percentHint = Number.isFinite(growth.marketReturnPercent)
+      ? ` · ${formatGrowthPercent(growth.marketReturnPercent)}`
+      : "";
+    dom.growthMarketTitle.textContent = title;
+    dom.growthMarketReturn.textContent = formatSignedCurrency(growth.marketReturn);
+    applySignedClass(dom.growthMarketReturn, growth.marketReturn);
+    dom.growthMarketReturnLabel.textContent = hasDeposits
+      ? `בלי ההפקדות${percentHint}`
+      : `שינוי כולל, בלי פירוט הפקדות${percentHint}`;
+  } else {
+    dom.growthMarketTitle.textContent = "תשואה מהשוק";
+    dom.growthMarketReturn.textContent = formatCurrency(0);
+    applySignedClass(dom.growthMarketReturn, 0);
+    dom.growthMarketReturnLabel.textContent = "השינוי בלי ההפקדות";
   }
+
+  dom.growthSplitSummary.textContent = buildGrowthSplitSummary(growth);
+}
+
+function buildGrowthSplitSummary(growth) {
+  if (!growth || !Number.isFinite(growth.currentTotal)) {
+    return "שווי קודם + הפקדות + תשואה = שווי עכשיו.";
+  }
+
+  const current = formatCurrency(growth.currentTotal);
+  const previous = Number.isFinite(growth.previousTotal) ? formatCurrency(growth.previousTotal) : null;
+
+  if (growth.hasDepositSplit && previous && Number.isFinite(growth.marketReturn)) {
+    return `${previous} שווי קודם, ${formatSignedCurrency(growth.totalDeposits)} הפקדות, ${formatSignedCurrency(growth.marketReturn)} תשואה מהשוק = ${current} עכשיו.`;
+  }
+
+  if (previous && Number.isFinite(growth.netChange)) {
+    return `${previous} שווי קודם, ${formatSignedCurrency(growth.netChange)} שינוי כולל = ${current} עכשיו. בלי נתון הפקדות אי אפשר לדעת כמה מזה כסף שנכנס וכמה תשואה.`;
+  }
+
+  return `השווי העדכני הוא ${current}.`;
+}
+
+function applySignedClass(element, value) {
+  element.classList.remove("is-up", "is-down");
+  if (!Number.isFinite(value) || value === 0) {
+    return;
+  }
+  element.classList.add(value > 0 ? "is-up" : "is-down");
 }
 
 function sortBreakdownItems(items, mode) {

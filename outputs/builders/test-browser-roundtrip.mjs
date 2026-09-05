@@ -42,17 +42,21 @@ const depositCardVisible = await page.locator("#growth-total-deposits-card").isV
 if (!depositCardVisible) {
   throw new Error("total deposits card should be visible for the demo file");
 }
-const depositPercentVisible = await page.locator("#growth-deposit-percent-card").isVisible();
-if (!depositPercentVisible) {
-  throw new Error("deposit percent card should be visible for the demo file");
+const marketCardVisible = await page.locator("#growth-market-card").isVisible();
+if (!marketCardVisible) {
+  throw new Error("market return card should be visible for the demo file");
 }
 const totalDepositsText = (await page.locator("#growth-total-deposits").textContent())?.trim() ?? "";
-const depositPercentText = (await page.locator("#growth-deposit-percent").textContent())?.trim() ?? "";
+const marketReturnText = (await page.locator("#growth-market-return").textContent())?.trim() ?? "";
+const splitSummaryText = (await page.locator("#growth-split-summary").textContent())?.trim() ?? "";
 if (!/[1-9]/.test(totalDepositsText)) {
   throw new Error(`total deposits not populated: "${totalDepositsText}"`);
 }
-if (!/[1-9].*%/.test(depositPercentText)) {
-  throw new Error(`deposit percent not populated: "${depositPercentText}"`);
+if (!/[1-9]/.test(marketReturnText)) {
+  throw new Error(`market return not populated: "${marketReturnText}"`);
+}
+if (!splitSummaryText.includes("הפקדות") || !splitSummaryText.includes("תשואה")) {
+  throw new Error(`split summary missing deposit/yield story: "${splitSummaryText}"`);
 }
 
 console.log(
@@ -64,7 +68,8 @@ console.log(
       kpiHoldings: await page.locator("#kpi-holdings").textContent(),
       fileNameLabel: await page.locator("#file-name").textContent(),
       totalDeposits: totalDepositsText,
-      depositPercent: depositPercentText,
+      marketReturn: marketReturnText,
+      splitSummary: splitSummaryText,
     },
     null,
     2

@@ -1174,7 +1174,7 @@ button {
 
 .growth-metrics {
   display: grid;
-  grid-template-columns: 1.15fr repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1.1fr 1fr 1fr;
   gap: 12px;
 }
 
@@ -1218,6 +1218,21 @@ button {
 .growth-metric-primary p,
 .growth-metric-primary span {
   color: rgba(249, 246, 239, 0.84);
+}
+
+.growth-metric strong.is-up {
+  color: #176a63;
+}
+
+.growth-metric strong.is-down {
+  color: #b42318;
+}
+
+.growth-split-summary {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  line-height: 1.65;
 }
 
 .chart-card-wide {

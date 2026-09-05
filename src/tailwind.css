@@ -16,10 +16,9 @@
  * single-column stacks.
  */
 
-/* Growth metrics flow cleanly whether the file has 3 or 5 cards (deposits optional). */
 @media (min-width: 921px) {
   .growth-metrics {
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    grid-template-columns: 1.1fr 1fr 1fr;
   }
 }
 

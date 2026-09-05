@@ -427,9 +427,9 @@
             <article class="chart-card chart-card-wide growth-spotlight">
               <div class="chart-card-head growth-head">
                 <div>
-                  <p class="section-kicker">צמיחה</p>
-                  <h3>מגמת צמיחה כוללת</h3>
-                  <p id="growth-period-label" class="growth-period-label">מעלים קובץ כדי לראות את קו הצמיחה לאורך הזמן.</p>
+                  <p class="section-kicker">התקופה האחרונה</p>
+                  <h3>מאיפה הגיע השינוי</h3>
+                  <p id="growth-period-label" class="growth-period-label">מעלים קובץ כדי להפריד בין כסף שהופקד לתשואה מהשוק.</p>
                 </div>
                 <div class="chart-card-actions">
                   <label class="visually-hidden" for="chart-sort-growth">סדר ציר הזמן בתרשים</label>
@@ -437,41 +437,30 @@
                     <option value="time-asc">זמן: מהישן לחדש</option>
                     <option value="time-desc">זמן: מהחדש לישן</option>
                   </select>
-                  <span class="chart-tip growth-tip">מבוסס על טבלת הצמיחה החדשה</span>
+                  <span class="chart-tip growth-tip">הפקדות מול תשואה</span>
                 </div>
               </div>
 
               <div class="growth-metrics">
                 <article class="growth-metric growth-metric-primary">
-                  <p>שווי נוכחי</p>
+                  <p>שווי עכשיו</p>
                   <strong id="growth-current-total">₪0</strong>
                   <span id="growth-current-date">ממתין לטעינה</span>
                 </article>
 
-                <article class="growth-metric">
-                  <p>עלייה נטו</p>
-                  <strong id="growth-net-change">₪0</strong>
-                  <span id="growth-net-change-label">לעומת הנתון הקודם</span>
-                </article>
-
-                <article class="growth-metric">
-                  <p>קצב צמיחה</p>
-                  <strong id="growth-percent-change">0%</strong>
-                  <span id="growth-percent-change-label">שינוי מצטבר בין התקופות</span>
-                </article>
-
-                <article class="growth-metric" id="growth-total-deposits-card" hidden>
-                  <p>כולל הפקדות</p>
+                <article class="growth-metric" id="growth-total-deposits-card">
+                  <p>כסף שהופקד</p>
                   <strong id="growth-total-deposits">₪0</strong>
-                  <span id="growth-total-deposits-label">סך ההפקדות בתקופה</span>
+                  <span id="growth-total-deposits-label">הפקדות בתקופה, לא רווח</span>
                 </article>
 
-                <article class="growth-metric" id="growth-deposit-percent-card" hidden>
-                  <p>אחוז עליה הפקדות</p>
-                  <strong id="growth-deposit-percent">0%</strong>
-                  <span id="growth-deposit-percent-label">משקל ההפקדות מהבסיס</span>
+                <article class="growth-metric" id="growth-market-card">
+                  <p id="growth-market-title">תשואה מהשוק</p>
+                  <strong id="growth-market-return">₪0</strong>
+                  <span id="growth-market-return-label">השינוי בלי ההפקדות</span>
                 </article>
               </div>
+              <p id="growth-split-summary" class="growth-split-summary">שווי קודם + הפקדות + תשואה = שווי עכשיו.</p>
 
               <div id="growth-chart" class="chart-canvas chart-canvas-growth"></div>
             </article>
